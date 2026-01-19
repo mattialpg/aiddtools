@@ -11,6 +11,7 @@ import pandas as pd
 from tqdm import tqdm
 import yaml
 from concurrent.futures import ProcessPoolExecutor
+from itertools import repeat
 
 sys.path.append(str(Path(__file__).resolve().parent))
 # with warnings.catch_warnings():
@@ -94,7 +95,7 @@ def xml_to_df(xml_data, pdb_id=None, ligand=None, site_id=None):
 
 
 def generate_pymol(complex, ligand, pdb_id, site, pdb_file,
-                   pdb_outdir=None, pse_outdir=None):
+                   pdb_outdir=None, pse_outdir=None, center=False):
     """
     Generate PyMOL session or PDB binding site file for a specific ligand binding site.
     """
@@ -117,10 +118,10 @@ def generate_pymol(complex, ligand, pdb_id, site, pdb_file,
         os.makedirs(pdb_outdir, exist_ok=True)
         outpath = os.path.join(pdb_outdir, f"{basename}.pdb")
         selection = " or ".join([f"(chain {r[-1]} and resi {r[:-1]})" for r in residues])
-        print(residues)
         cmd.load(str(pdb_file), pdb_id)
-        com = cmd.centerofmass(selection)
-        cmd.translate([-com[0], -com[1], -com[2]], "all")
+        if center:
+            com = cmd.centerofmass(selection)
+            cmd.translate([-com[0], -com[1], -com[2]], "all")
         cmd.save(outpath, selection)
         cmd.delete("all")
         # print(f"Saved binding site PDB {basename}.pdb")
@@ -259,11 +260,13 @@ def harmonise_interactions(df_int):
     return df_int
 
 
-def analyse_pdb_files(pdb_files):
+def analyse_pdb_files(pdb_files, lig_id=None, xml_outdir=None,
+                      pdb_outdir=None, pse_outdir=None):
    
     with ProcessPoolExecutor() as executor:
-        xml_results = list(tqdm(executor.map(get_interactions, pdb_files),
-                total=len(pdb_files), desc="Analysing interactions"))
+        xml_results = list(tqdm(executor.map(get_interactions, pdb_files, repeat(lig_id),
+            repeat(xml_outdir), repeat(pdb_outdir), repeat(pse_outdir)),
+            total=len(pdb_files), desc="Analysing interactions"))
 
     df_list = []
     for xml_data in xml_results:
