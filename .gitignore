@@ -1,7 +1,4 @@
-**/__pycache__/
-*.py[cod]
-__init__.py
-biblio/
-old/
-CADD-tools_old.rar
-.codegpt
+__pycache__/
+*.pyc
+mdtools.egg-info/
+.vscode/

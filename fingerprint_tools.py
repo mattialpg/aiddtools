@@ -19,8 +19,6 @@ from rdkit.Chem.AtomPairs import Pairs, Torsions
     Other ideas from: https://github.com/MunibaFaiza/tanimoto_similarities/blob/main/tanimoto_similarities.py    
 """
 
-# Cache to store fingerprint generators
-_cache_fp = {}
 
 def fp_to_numpy(fp, nBits=None):
     """Convert RDKit fingerprint (ExplicitBitVect or SparseIntVect) to numpy array."""
@@ -31,6 +29,8 @@ def fp_to_numpy(fp, nBits=None):
     return arr
 
 
+# Cache to store fingerprint generators
+_cache_fp = {}
 def calculate_fp(mol, method='morgan2', nBits=2048, pca=False, as_numpy=False):
     method = method.lower()
     key = (method, nBits)
@@ -84,11 +84,13 @@ def calculate_fp(mol, method='morgan2', nBits=2048, pca=False, as_numpy=False):
 
     # MHFP
     elif method in ['mhfp', 'mhfp6']:
+        from mhfp.encoder import MHFPEncoder
         if key not in _cache_fp:
-            from mhfp.encoder import MHFPEncoder
             _cache_fp[key] = MHFPEncoder(nBits)
-        fp = _cache_fp[key].EncodeMol(mol, isomeric=False)
+        radius = 2 if method == 'mhfp' else 6
+        fp = _cache_fp[key].encode_mol(mol, radius=radius, isomeric=False)
         return np.array(fp) if as_numpy else fp
+
 
     # HLFP
     elif method == 'hl':
@@ -97,16 +99,29 @@ def calculate_fp(mol, method='morgan2', nBits=2048, pca=False, as_numpy=False):
         atom_pca = np.array(res.f_atoms_pca)
         bond_pca = np.array(res.f_bonds_pca)
         fp = np.concatenate((atom_pca, bond_pca), axis=1)
-        if pca:
-            second_pca = PCA(n_components=50)
-            fp = second_pca.fit_transform(fp)
-        return fp if as_numpy else res  # return raw HLFP object if requested
+        return fp
 
     # Biosynfoni
     elif method == 'biosynfoni':
         from biosynfoni import Biosynfoni
         fp = Biosynfoni(mol).fingerprint
         return np.array(fp) if as_numpy else fp
+
+    # PubChem (CDPL)
+    elif method == 'pubchem':
+        from CDPL import Chem as CDPLChem, Descr, Util
+        smiles = Chem.MolToSmiles(mol, canonical=True)
+        cdpl_mol = CDPLChem.BasicMolecule()
+        CDPLChem.parseSMILES(smiles, cdpl_mol)
+        CDPLChem.calcBasicProperties(cdpl_mol, False)
+        fp = Util.BitSet(881)
+        Descr.PubChemFingerprintGenerator().generate(cdpl_mol, fp)
+
+        if as_numpy:
+            return np.fromiter(
+                (1 if fp.test(i) else 0 for i in range(fp.getSize())),
+                dtype=np.uint8, count=fp.getSize())
+        return fp
 
     else:
         raise ValueError(f"Unknown fingerprint method: {method}")
@@ -140,18 +155,18 @@ def tanimoto_similarity_matrix(fp_matrix1, fp_matrix2=None):
 
 
 _cache_sim = {}
-def get_similarity(fp1, fp2, method='morgan2', nBits=2048):
+def calculate_similarity(fp1, fp2, method='morgan2', nBits=2048):
     """
     Calculate similarity between two fingerprints based on the specified method.
     More info at: https://github.com/cosconatilab/PyRMD/blob/main/PyRMD_v1.03.py
     """
     key = (method, nBits)
 
-    # Methods using RDKit FingerprintSimilarity (Tanimoto)
     if method in ['morgan2', 'morgan3', 'maccs', 'rdkit', 'torsion', 'topotorsion', 'avalon', 'atompair']:
         return round(DataStructs.FingerprintSimilarity(fp1, fp2), 3)
 
     elif method == 'map4':
+        # Requires: pip install tmap
         import tmap as tm
         if key not in _cache_sim:
             _cache_sim[key] = tm.Minhash(nBits)
@@ -159,10 +174,33 @@ def get_similarity(fp1, fp2, method='morgan2', nBits=2048):
         return round(1 - enc.get_distance(fp1, fp2), 3)
 
     elif method in ['mhfp', 'mhfp6']:
+        from mhfp.encoder import MHFPEncoder
         if key not in _cache_sim:
             _cache_sim[key] = MHFPEncoder(nBits)
         mhfp = _cache_sim[key]
         return round(1 - mhfp.Distance(fp1, fp2), 3)
+
+    # elif method == 'pubchem':
+    #     fp_and = fp1 & fp2
+    #     c = fp_and.count
+    #     a = fp1.count
+    #     b = fp2.count
+    #     if a + b - c == 0:
+    #         return 0.0
+    #     return round(c / (a + b - c), 3)
+
+    elif method == 'pubchem':
+        # fp1, fp2 are numpy arrays of 0/1
+        c = int((fp1 & fp2).sum())
+        a = int(fp1.sum())
+        b = int(fp2.sum())
+
+        if a + b - c == 0:
+            return 0.0
+
+        return round(c / (a + b - c), 3)
+
+    raise ValueError(f"Unknown similarity method: {method}")
 
 
 def count_tanimoto(mat1, mat2, block_size=500):

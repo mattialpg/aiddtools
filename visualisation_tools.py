@@ -20,6 +20,13 @@ from rdkit.Chem.Draw import rdDepictor
 rdDepictor.SetPreferCoordGen(True)
 import py3Dmol
 
+from rdkit import Chem
+from functools import reduce
+import ipywidgets as widgets
+from IPython.display import display
+import ipywidgets as widgets
+from IPython.display import display, clear_output
+
 # from openmm.app import PDBFile
 # from pdbfixer import PDBFixer
 # from openbabel import openbabel
@@ -125,28 +132,12 @@ def draw_mols(mols, filename=None, align=False):
 #     # d.WriteDrawingText("0.png")
 
 
-def drawit(mol, confId=-1, label_dict=None, show_dummy_indices=True):
-    """
-    Draw a single molecule or combined fragments in 3D using py3Dmol.
-
-    Parameters:
-    - mol: RDKit Mol or list of Mols
-    - confId: Conformer ID to use
-    - label_dict: Optional dict of labels {text: [x, y, z]}
-    - show_dummy_indices: If True, label dummy atoms and their neighbours
-    """
-    if isinstance(mol, list):
-        mol = reduce(Chem.CombineMols, mol)
-
+def render_single_3dmol(mol, confId=-1, show_dummy_indices=True):
     view = py3Dmol.view(width=700, height=450)
     view.addModel(Chem.MolToMolBlock(mol, confId=confId), 'sdf')
     view.setStyle({'stick': {}})
     view.setBackgroundColor('0xeeeeee')
     view.zoomTo()
-
-    if label_dict:
-        for text, pos in label_dict.items():
-            view.addLabel(text, {"position": dict(zip("xyz", pos)), "fontSize": 12})
 
     if show_dummy_indices:
         conf = mol.GetConformer(confId)
@@ -154,23 +145,112 @@ def drawit(mol, confId=-1, label_dict=None, show_dummy_indices=True):
             if atom.GetAtomicNum() == 0:
                 pos = conf.GetAtomPosition(atom.GetIdx())
                 view.addLabel(str(atom.GetIdx()), {
-                    "position": dict(x=pos.x, y=pos.y, z=pos.z),
-                    "fontSize": 12,
-                    "backgroundColor": "grey",
-                    "borderColor": "black",
-                    "inFront": True
+                    'position': dict(x=pos.x, y=pos.y, z=pos.z),
+                    'fontSize': 12,
+                    'backgroundColor': 'grey',
+                    'borderColor': 'black',
+                    'inFront': True
                 })
                 for neigh in atom.GetNeighbors():
                     npos = conf.GetAtomPosition(neigh.GetIdx())
                     view.addLabel(str(neigh.GetIdx()), {
-                        "position": dict(x=npos.x, y=npos.y, z=npos.z),
-                        "fontSize": 12,
-                        "backgroundColor": "grey",
-                        "borderColor": "black",
-                        "inFront": True
+                        'position': dict(x=npos.x, y=npos.y, z=npos.z),
+                        'fontSize': 12,
+                        'backgroundColor': 'grey',
+                        'borderColor': 'black',
+                        'inFront': True
                     })
 
     return view.show()
+
+
+def render_multiple_3dmol(mols, label_list=None, confId=-1, show_dummy_indices=True):
+    out = widgets.Output()
+    label_box = widgets.HTML(value='')
+    status = widgets.Label()
+    prev_btn = widgets.Button(description='Prev')
+    next_btn = widgets.Button(description='Next')
+
+    slider_widget = widgets.IntSlider(value=0, min=0,
+        max=len(mols) - 1, step=1)
+    slider_widget.continuous_update = False
+
+    idx = 0
+
+    def update_label(i):
+        if not label_list:
+            label_box.value = ''
+            return
+        if i < 0 or i >= len(label_list):
+            label_box.value = ''
+            return
+        label_box.value = str(label_list[i])
+
+    def update_status(i):
+        status.value = f'{i + 1}/{len(mols)}'
+
+    def render(i):
+        with out:
+            clear_output(wait=True)
+            render_single_3dmol(mols[int(i)], confId=confId,
+                show_dummy_indices=show_dummy_indices)
+        update_label(int(i))
+        update_status(int(i))
+
+    def on_slider(change):
+        nonlocal idx
+        if change.get('name') != 'value':
+            return
+        idx = int(change['new'])
+        render(idx)
+
+    def on_prev(_):
+        nonlocal idx
+        idx = (idx - 1) % len(mols)
+        slider_widget.value = idx
+        render(idx)
+
+    def on_next(_):
+        nonlocal idx
+        idx = (idx + 1) % len(mols)
+        slider_widget.value = idx
+        render(idx)
+
+    slider_widget.observe(on_slider, names='value')
+    prev_btn.on_click(on_prev)
+    next_btn.on_click(on_next)
+
+    display(slider_widget)
+    display(out)
+    display(label_box)
+    display(widgets.HBox([prev_btn, next_btn, status]))
+
+    render(0)
+
+
+def drawit(mol, confId=-1, labels=None, show_dummy_indices=True, slider=True):
+    mols = mol if isinstance(mol, list) else [mol]
+
+    if labels == 'smiles':
+        label_list = [Chem.MolToSmiles(x) for x in mols]
+    elif labels:
+        label_list = list(labels)
+    else:
+        label_list = None
+
+    if not slider:
+        if isinstance(mol, list):
+            mol = reduce(Chem.CombineMols, mol)
+        return render_single_3dmol(mol, confId=confId, show_dummy_indices=show_dummy_indices)
+
+    if len(mols) == 1:
+        render_single_3dmol(mols[0], confId=confId, show_dummy_indices=show_dummy_indices)
+        if label_list:
+            display(widgets.HTML(value=str(label_list[0])))
+        return
+
+    return render_multiple_3dmol(mols, label_list=label_list,
+        confId=confId, show_dummy_indices=show_dummy_indices)
 
 
 def draw_exploded(mols, confId=-1, scale=2.0, show_dummy_indices=True):
