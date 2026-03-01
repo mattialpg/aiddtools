@@ -15,7 +15,6 @@ from functools import reduce
 from rdkit import Chem
 from rdkit.Chem import rdFMCS
 from rdkit.Chem import Draw, AllChem
-from rdkit.Chem.Draw import rdMolDraw2D
 from rdkit.Chem.Draw import rdDepictor
 rdDepictor.SetPreferCoordGen(True)
 import py3Dmol
@@ -229,7 +228,7 @@ def render_multiple_3dmol(mols, label_list=None, confId=-1, show_dummy_indices=T
 
 
 def drawit(mol, confId=-1, labels=None, show_dummy_indices=True, slider=True):
-    mols = mol if isinstance(mol, list) else [mol]
+    mols = mol if isinstance(mol, (list, tuple)) else [mol]
 
     if labels == 'smiles':
         label_list = [Chem.MolToSmiles(x) for x in mols]
@@ -239,7 +238,7 @@ def drawit(mol, confId=-1, labels=None, show_dummy_indices=True, slider=True):
         label_list = None
 
     if not slider:
-        if isinstance(mol, list):
+        if isinstance(mol, (list, tuple)):
             mol = reduce(Chem.CombineMols, mol)
         return render_single_3dmol(mol, confId=confId, show_dummy_indices=show_dummy_indices)
 

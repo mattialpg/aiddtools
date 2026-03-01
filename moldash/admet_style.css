@@ -1,0 +1,552 @@
+/* =========================
+   ADMET panel layout
+   ========================= */
+
+#admet-panel{
+  position:fixed;
+  left:50%;
+  bottom:24px;
+  transform:translateX(-50%);
+  width:min(550px, calc(100vw - 36px));
+  z-index:30;
+  transition: width 580ms ease, bottom 580ms ease, max-height 580ms ease;
+}
+
+/* Expanded panel tweaks */
+#admet-panel.admet-expanded{
+  width:min(1500px, calc(100vw - 50px));
+  height:93vh;
+  --card-bg: rgba(29, 31, 37, 0.5);
+}
+
+#admet-panel.admet-expanded .card{
+  height:100%;
+  display:flex;
+  flex-direction:column;
+}
+
+/* ADMET list */
+#admet{
+  max-height:100px;
+  overflow:auto;
+  padding-left:10px;
+  padding-right:20px;
+}
+
+/* Expanded panel content area */
+#admet-panel.admet-expanded #admet{
+  max-height:none;
+  height:calc(93vh - 56px);
+  overflow:auto;
+}
+
+/* =========================
+   Controls
+   ========================= */
+
+/* header wrapper used when title and toggle are placed together */
+.admet-header{
+  display:flex;
+  align-items:center;
+  width:100%;
+  padding:8px 10px;        /* header height and right padding */
+  padding-left:10px;       /* align left edge with #admet list padding */
+  box-sizing:border-box;
+  gap:12px;
+}
+
+/* when title and toggle share the header, push the controls to the right edge */
+.admet-header .admet-controls{
+  margin-left:auto;
+}
+
+/* ensure controls sit beside the panel title rather than on a separate line */
+.admet-controls{
+  display:inline-flex;              /* inline so it stays beside title */
+  justify-content:flex-end;          /* align icon to right when together */
+  margin-bottom:0;                  /* no extra gap when inline */
+  margin-top:0;                      /* remove negative offset; header controls are vertically centered */
+  align-items:center;               /* vertical center in case of variable height */
+}
+
+/* heading/title inside panel should also be inline-block for side-by-side layout */
+#admet-panel .admet-title,
+#admet-panel h1,
+#admet-panel h2,
+#admet-panel .title {
+  display:inline-block;
+  vertical-align:middle;
+  margin-right:8px;                 /* spacing before the toggle */
+}
+
+.admet-toggle {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 6px 4px;           /* sane padding so icon centers vertically in taller header */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.85;
+  transition: opacity .2s ease, transform .2s ease;
+}
+
+.admet-toggle:hover {
+  opacity: 0.8;
+}
+
+.admet-toggle-icon {
+  width: 15px;
+  height: 15px;
+  display: block;
+  filter: invert(1);
+  opacity:0.85;
+}
+
+.admet-toggle.active {
+  transform: scale(1.05);
+}
+
+/* =========================
+   Widget base
+   ========================= */
+
+.risk2-inline{
+  display:flex;
+  align-items:center;
+  gap:6px;
+}
+
+.risk2-inline-title{
+  flex:1 1 auto;
+  min-width:0;
+  white-space:normal;
+  overflow:hidden;
+  display:-webkit-box;
+  -webkit-line-clamp:2;
+  -webkit-box-orient:vertical;
+  line-height:1.2;
+  font-size:12px;
+  color:rgba(255,255,255,.92);
+}
+
+.risk2-stage2{
+  position:relative;
+  flex:0 0 360px;
+  min-width:0;
+}
+
+/* Probability top scale */
+.risk2-topscale{
+  position:relative;
+  height:22px;
+  margin-bottom:5px;
+  color:var(--muted);
+  font-size:14px;
+  letter-spacing:1px;
+}
+
+.risk2-topscale .z{
+  position:absolute;
+  top:0;
+  transform:translateX(-50%);
+  white-space:nowrap;
+}
+
+/* Bar track */
+.risk2-track{
+  position:relative;
+  height:6px;
+  border-radius: 999px;
+  border:1px solid var(--card-border);
+  background:rgba(255,255,255,.06);
+}
+
+.risk2-barclip{
+  position:absolute;
+  inset:0;
+  border-radius:10px;
+  overflow:hidden;
+}
+
+.risk2-gradient{
+  position:absolute;
+  inset:0;
+  background:linear-gradient(
+    90deg,
+    #b91c1c 0%,
+    #ef4444 20%,
+    #facc15 50%,
+    #84cc16 75%,
+    #15803d 100%
+  );
+}
+
+.risk2-fill{
+  position:absolute;
+  top:0;
+  right:0;
+  height:100%;
+  background:rgba(9,9,11,.85);
+  pointer-events:none;
+  --notch: 8px;
+  --soft: 0.4px;
+  --cx: calc(-0.15 * var(--notch));
+  -webkit-mask:
+    linear-gradient(#000 0 0),
+    radial-gradient(circle at var(--cx) 50%,
+      transparent calc(var(--notch) - var(--soft)),
+      #000 calc(var(--notch) + var(--soft))
+    );
+  -webkit-mask-composite: source-in;
+  mask:
+    linear-gradient(#000 0 0),
+    radial-gradient(circle at var(--cx) 50%,
+      transparent calc(var(--notch) - var(--soft)),
+      #000 calc(var(--notch) + var(--soft))
+    );
+  mask-composite: intersect;
+}
+
+/* Separators (used for probability endpoints) */
+.risk2-sep{
+  position:absolute;
+  top:-30px;
+  bottom:-6px;
+  width:2px;
+  background:rgba(255,255,255,.14);
+  transform:translateX(-1px);
+}
+
+/* Percentile marker and label */
+.risk2-percentile{
+  position:absolute;
+  top:-8px;
+  bottom:-8px;
+  width:3px;
+  transform:translateX(-50%);
+  background:rgba(255,255,255,.95);
+  border-radius:3px;
+  box-shadow:0 0 8px rgba(255,255,255,.7), 0 0 18px rgba(59,130,246,.35);
+}
+
+.risk2-percentile-label{
+  position:absolute;
+  right:0;
+  bottom:-28px;
+  transform:translateX(50%);
+  text-align:center;
+  line-height:1.1;
+  white-space:nowrap;
+}
+
+.risk2-percentile-label .v{
+  font-size:12px;
+  color:rgba(255,255,255,.85);
+}
+
+.risk2-percentile-label .k{
+  font-size:10px;
+  color:var(--muted);
+}
+
+/* Knob */
+.risk2-knob{
+  --knob-inset:25%;
+  --knob-border:1px;
+  position:absolute;
+  top:50%;
+  transform:translate(-50%,-50%);
+  width:14px;
+  height:14px;
+  border-radius:999px;
+  background:rgba(255,255,255,.10);
+  border:var(--knob-border) solid rgba(255,255,255,1);
+}
+
+.risk2-knob::after{
+  content:"";
+  position:absolute;
+  top:50%;
+  left:50%;
+  width:calc(100% - (2 * var(--knob-inset)));
+  height:calc(100% - (2 * var(--knob-inset)));
+  transform:translate(-50%,-50%);
+  border-radius:999px;
+  background:rgba(255,255,255,1);
+}
+
+/* Probability bottom scale */
+.risk2-bottomscale{
+  position:relative;
+  height:24px;
+  margin-top:0;
+  color:var(--muted);
+  font-size:11px;
+}
+
+.risk2-bottomscale span{
+  position:absolute;
+  bottom:0;
+  transform:translateX(-50%);
+  white-space:nowrap;
+}
+
+.risk2-bottomscale span:first-child{ transform:translateX(0); }
+.risk2-bottomscale span:last-child{ transform:translateX(-100%); }
+
+/* =========================
+   Compact mode
+   ========================= */
+#admet-panel:not(.admet-expanded) .admet-header{
+  padding-top:0px;
+  padding-bottom:6px;
+}
+
+#admet.admet-compact .admet-entry{
+  padding-left:0px;
+  padding-right:8px;
+}
+
+#admet.admet-compact .risk2-inline-title{
+  font-size:12px;
+  font-weight:400;
+  color:rgba(255,255,255,.85);
+  opacity:.85;
+  letter-spacing:0;
+  text-transform:none;
+  line-height:1.2;
+}
+
+#admet.admet-compact .risk2-topscale,
+#admet.admet-compact .risk2-bottomscale,
+#admet.admet-compact .risk2-percentile-label{
+  display:none;
+}
+
+#admet.admet-compact .risk2-percentile{
+  top:-3px;
+  bottom:-3px;
+}
+
+#admet.admet-compact .risk2-sep{
+  top:-4px;
+  bottom:-4px;
+  background:rgba(255,255,255,.18);
+}
+
+#admet.admet-compact .risk2-topscale{
+  height:0;
+  margin:0;
+}
+
+#admet.admet-compact .risk2-bottomscale{
+  height:0;
+  margin:0;
+}
+
+/* =========================
+   Non-compact adjustments
+   ========================= */
+
+#admet:not(.admet-compact) .risk2-sep{
+  background:none;
+  border-left:2px dashed rgba(255,255,255,.22);
+  width:0;
+  transform:translateX(0);
+}
+
+#admet:not(.admet-compact) .risk2-track{
+  height:14px;
+  border-radius:12px;
+}
+
+#admet:not(.admet-compact) .risk2-knob{
+  width:18px;
+  height:18px;
+  --knob-inset:30%;
+}
+
+/* =========================
+   Expanded mode layout
+   ========================= */
+
+#admet:not(.admet-compact) .admet-entry{
+  border:1px solid rgba(255,255,255,.12);
+  border-radius:20px;
+  padding:14px 16px;
+  background:rgba(38, 42, 49, 0.7);
+}
+
+.admet-entry{
+  margin-bottom:14px;
+}
+
+.admet-group-title{
+  margin:12px 0 8px 0;
+  padding-top:8px;
+  font-size:11px;
+  letter-spacing:1px;
+  text-transform:uppercase;
+  color:rgba(255,255,255,.75);
+  border-top:1px solid rgba(255,255,255,.10);
+}
+
+#admet.admet-compact .admet-group-title{
+  display:none;
+}
+
+#admet-panel.admet-expanded .admet-title,
+#admet-panel.admet-expanded h1,
+#admet-panel.admet-expanded h2,
+#admet-panel.admet-expanded .title{
+  font-size:18px;              /* increase size */
+  font-weight:600;             /* semibold */
+  color:rgba(255,255,255,1);   /* fully white */
+  letter-spacing:0.5px;        /* optional slight emphasis */
+}
+
+/* Layout: default collapsed = single column */
+.admet-group-grid{
+  display:block;
+}
+
+/* Expanded: 3 columns */
+#admet:not(.admet-compact) .admet-group-grid{
+  display:grid;
+  grid-template-columns:repeat(3, 1fr);
+  gap:14px;
+}
+
+/* In grid layout, the per-entry margin is not needed */
+#admet:not(.admet-compact) .admet-entry{
+  margin-bottom:0;
+}
+
+@media (max-width:900px){
+  #admet:not(.admet-compact) .admet-group-grid{
+    grid-template-columns:1fr;
+  }
+}
+
+/* =========================
+   Scrollbar
+   ========================= */
+
+#admet::-webkit-scrollbar{
+  width:8px;
+}
+
+#admet::-webkit-scrollbar-track{
+  background:transparent;
+}
+
+#admet::-webkit-scrollbar-thumb{
+  background:rgba(255,255,255,.25);
+  border-radius:8px;
+}
+
+/* =========================
+   Continuous endpoint styling
+   ========================= */
+
+/* Gradient with acceptance window */
+.range-gradient{
+  position:absolute;
+  inset:0;
+}
+
+/* Continuous bar: green inside [--acc-min, --acc-max], gradient outside */
+.continuous-track .range-gradient{
+  background: linear-gradient(
+    to right,
+    #dc2626 0%,
+    #dc2626 var(--left-red),
+    #facc15 var(--left-mid),
+    #16a34a var(--acc-min),
+    #16a34a var(--acc-max),
+    #facc15 var(--right-mid),
+    #dc2626 var(--right-red),
+    #dc2626 100%
+  );
+}
+
+/* Shared scale behaviour for continuous endpoints */
+.risk2-topscale-continuous,
+.risk2-bottomscale-continuous{
+  position:relative;
+  color:var(--muted);
+  font-size:11px;
+}
+
+.risk2-topscale-continuous span,
+.risk2-bottomscale-continuous span{
+  position:absolute;
+  transform:translateX(-50%);
+  white-space:nowrap;
+}
+
+/* Edge alignment: min flush-left, max flush-right */
+.risk2-topscale-continuous span:first-child,
+.risk2-bottomscale-continuous span:first-child{
+  transform:translateX(0);
+}
+
+.risk2-topscale-continuous span:last-child,
+.risk2-bottomscale-continuous span:last-child{
+  transform:translateX(-100%);
+}
+
+/* Top scale layout (tight gap above bar) */
+.risk2-topscale-continuous{
+  height:20px;
+  margin:0 0 2px 0;
+}
+
+.risk2-topscale-continuous span{
+  top:0;
+}
+
+/* Top ticks (exclude min and max) */
+.risk2-topscale-continuous span::after{
+  content:"";
+  position:absolute;
+  bottom:-8px;
+  left:50%;
+  width:1px;
+  height:6px;
+  transform:translateX(-50%);
+  background:rgba(255,255,255,.22);
+}
+
+.risk2-topscale-continuous span:first-child::after,
+.risk2-topscale-continuous span:last-child::after{
+  display:none;
+}
+
+/* Bottom scale layout */
+.risk2-bottomscale-continuous{
+  height:24px;
+  margin-top:0;
+}
+
+.risk2-bottomscale-continuous span{
+  bottom:0;
+}
+
+/* Bottom ticks (exclude min and max) */
+.risk2-bottomscale-continuous span::before{
+  content:"";
+  position:absolute;
+  top:-8px;
+  left:50%;
+  width:1px;
+  height:6px;
+  transform:translateX(-50%);
+  background:rgba(255,255,255,.22);
+}
+
+.risk2-bottomscale-continuous span:first-child::before,
+.risk2-bottomscale-continuous span:last-child::before{
+  display:none;
+}

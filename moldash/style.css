@@ -1,0 +1,105 @@
+:root{
+  --bg:#070A10;
+  --fg:#d7dde5;
+  --card-bg:rgba(255,255,255,.035);
+  --card-border:rgba(255,255,255,.10);
+  --muted:rgba(255,255,255,.55);
+}
+
+*{box-sizing:border-box}
+
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--fg);
+  font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+  overflow:hidden;
+}
+
+#viewer{
+  position:fixed;
+  inset:0;
+  width:100vw;
+  height:100vh;
+  touch-action:none;
+}
+
+/* Bottom-left molecule title */
+#mol-title{
+  position:fixed;
+  left:45px;
+  bottom:40px;
+  z-index:5;
+  pointer-events:none;
+}
+
+.mol-name{
+  font-size:30px;
+  font-style:italic;
+  font-weight:400;
+  font-family:"Times New Roman",Times,serif;
+  color:#fff;
+}
+
+.mol-meta{
+  margin-top:4px;
+  font-size:11px;
+  letter-spacing:1px;
+  text-transform:uppercase;
+  color:var(--muted);
+}
+
+/* Property panel */
+#property-panel{
+  position:fixed;
+  top:150px;
+  right:18px;
+  width:320px;
+  max-width:calc(100vw - 36px);
+  max-height:calc(100vh - 36px);
+  overflow:auto;
+  z-index:10;
+}
+
+.card{
+  background:var(--card-bg);
+  border:1px solid var(--card-border);
+  border-radius:14px;
+  padding:12px;
+  backdrop-filter:blur(14px) saturate(115%);
+  -webkit-backdrop-filter:blur(14px) saturate(115%);
+  box-shadow:0 20px 60px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.06);
+  overflow:hidden;
+}
+
+.title{
+  margin:0 0 6px 0;
+  font-size:11px;
+  opacity:.75;
+}
+
+
+/* Property table */
+table{
+  width:100%;
+  border-collapse:collapse;
+  font-size:12px;
+}
+
+td{
+  padding:4px 6px;
+}
+
+td:first-child{
+  padding-left:0;
+  opacity:.85;
+  text-align:left;
+}
+
+td:last-child{
+  padding-right:0;
+  text-align:right;
+  font-variant-numeric:tabular-nums;
+  color:#fff;
+  font-weight:600;
+}

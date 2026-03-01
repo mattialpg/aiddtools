@@ -1,0 +1,73 @@
+
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Molecule viewer</title>
+
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="admet_style.css">
+
+<script src="https://3dmol.csb.pitt.edu/build/3Dmol-min.js"></script>
+</head>
+
+<body>
+
+<div id="viewer"></div>
+
+<div id="mol-title">
+  <div class="mol-name">48164</div>
+  <div class="mol-meta">44 atoms · small molecule</div>
+</div>
+
+<div id="property-panel">
+  <div class="card">
+    <div class="title">PROPERTIES</div>
+    <table id="props"></table>
+  </div>
+</div>
+
+<div id="admet-panel">
+  <div class="card admet-card">
+    <div class="title">ADMET</div>
+    <div id="admet"></div>
+  </div>
+</div>
+
+<script>
+  window.MOLDASH = {"viewer": {"background": "#070A10", "stickRadius": 0.08, "sphereScale": 0.35, "zoomOut": 0.9}, "molecule": {"name": "48164", "smiles": "Nc1ccc(NC(=O)CCC(=O)N=NC=C2C(=O)Nc3ccccc32)cc1", "atomCount": 44}, "sdf": "\n     RDKit          3D\n\n 44 46  0  0  0  0  0  0  0  0999 V2000\n   -7.5609   -1.7282    2.8989 N   0  0  0  0  0  0  0  0  0  0  0  0\n   -6.5514   -1.2612    2.0025 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -5.5735   -0.3623    2.4452 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -4.5881    0.0971    1.5666 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -4.5631   -0.3458    0.2329 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.5815    0.1388   -0.6986 N   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.2272    0.4566   -0.3437 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.7396    0.0561    0.7491 O   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.3499    1.1889   -1.3129 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.8373    0.2428   -2.4011 C   0  0  0  0  0  0  0  0  0  0  0  0\n    0.1320    0.9548   -3.3028 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.2986    1.5454   -4.3282 O   0  0  0  0  0  0  0  0  0  0  0  0\n    1.5281    1.0228   -2.9957 N   0  0  0  0  0  0  0  0  0  0  0  0\n    2.0050    0.4717   -1.9551 N   0  0  0  0  0  0  0  0  0  0  0  0\n    3.3991    0.5487   -1.6648 C   0  0  0  0  0  0  0  0  0  0  0  0\n    3.8960   -0.0299   -0.5709 C   0  0  0  0  0  0  0  0  0  0  0  0\n    3.1856   -0.8032    0.4526 C   0  0  0  0  0  0  0  0  0  0  0  0\n    1.9477   -1.0347    0.4729 O   0  0  0  0  0  0  0  0  0  0  0  0\n    4.0901   -1.2755    1.4466 N   0  0  0  0  0  0  0  0  0  0  0  0\n    5.3640   -0.7891    1.0366 C   0  0  0  0  0  0  0  0  0  0  0  0\n    6.5768   -0.9894    1.6929 C   0  0  0  0  0  0  0  0  0  0  0  0\n    7.7359   -0.4198    1.1414 C   0  0  0  0  0  0  0  0  0  0  0  0\n    7.6632    0.3371   -0.0447 C   0  0  0  0  0  0  0  0  0  0  0  0\n    6.4318    0.5259   -0.6950 C   0  0  0  0  0  0  0  0  0  0  0  0\n    5.2917   -0.0534   -0.1316 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -5.5541   -1.2334   -0.2084 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -6.5372   -1.6942    0.6723 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -8.2972   -2.3955    2.5740 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -7.5664   -1.4299    3.9015 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -5.5807   -0.0086    3.4688 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.8656    0.8186    1.9233 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.8437    0.1847   -1.7083 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.9293    2.0126   -1.7766 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.4900    1.6364   -0.7660 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.3462   -0.6438   -1.9448 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.6923   -0.1268   -3.0058 H   0  0  0  0  0  0  0  0  0  0  0  0\n    4.0563    1.0821   -2.3402 H   0  0  0  0  0  0  0  0  0  0  0  0\n    3.8682   -1.8689    2.2725 H   0  0  0  0  0  0  0  0  0  0  0  0\n    6.6242   -1.5758    2.5992 H   0  0  0  0  0  0  0  0  0  0  0  0\n    8.6905   -0.5629    1.6302 H   0  0  0  0  0  0  0  0  0  0  0  0\n    8.5608    0.7752   -0.4559 H   0  0  0  0  0  0  0  0  0  0  0  0\n    6.3750    1.1013   -1.6085 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -5.5589   -1.5728   -1.2363 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -7.2897   -2.3839    0.3157 H   0  0  0  0  0  0  0  0  0  0  0  0\n  1  2  1  0\n  2  3  2  0\n  3  4  1  0\n  4  5  2  0\n  5  6  1  0\n  6  7  1  0\n  7  8  2  0\n  7  9  1  0\n  9 10  1  0\n 10 11  1  0\n 11 12  2  0\n 11 13  1  0\n 13 14  2  3\n 14 15  1  0\n 15 16  2  3\n 16 17  1  0\n 17 18  2  0\n 17 19  1  0\n 19 20  1  0\n 20 21  2  0\n 21 22  1  0\n 22 23  2  0\n 23 24  1  0\n 24 25  2  0\n  5 26  1  0\n 26 27  2  0\n 27  2  1  0\n 25 16  1  0\n 25 20  1  0\n  1 28  1  0\n  1 29  1  0\n  3 30  1  0\n  4 31  1  0\n  6 32  1  0\n  9 33  1  0\n  9 34  1  0\n 10 35  1  0\n 10 36  1  0\n 15 37  1  0\n 19 38  1  0\n 21 39  1  0\n 22 40  1  0\n 23 41  1  0\n 24 42  1  0\n 26 43  1  0\n 27 44  1  0\nM  END\n\n$$$$\n", "properties": [{"name": "Molecular weight (Da)", "value": 363.37699999999984}, {"name": "cLogP (Crippen)", "value": 2.959500000000001}, {"name": "TPSA (Å²)", "value": 126.00999999999999}, {"name": "H-bond donors", "value": 3}, {"name": "H-bond acceptors", "value": 5}, {"name": "Rotatable bonds", "value": 6}, {"name": "Ring count", "value": 3}, {"name": "Aromatic rings", "value": 2}, {"name": "Heavy atoms", "value": 27}, {"name": "Fraction Csp3", "value": 0.10526315789473684}], "endpoints": [{"id": "QED", "kind": "classification", "category": "Medicinal Chemistry", "percentile": 37.611, "probability": 0.429}, {"id": "Lipinski Rules", "kind": "continuous", "category": "Medicinal Chemistry", "percentile": 63.804, "value": 4.0, "domain": {"min": 0.0, "max": 4.0}, "acceptance": {"min": 0.0, "max": 1.0}}, {"id": "MW", "kind": "continuous", "category": "Physicochemical Properties", "percentile": 56.844, "value": 363.377, "domain": {"min": 0.0, "max": 1000.0}, "acceptance": {"min": 100.0, "max": 600.0}}, {"id": "logP", "kind": "continuous", "category": "Physicochemical Properties", "percentile": 61.187, "value": 2.96, "domain": {"min": -2.0, "max": 8.0}, "acceptance": {"min": 0.0, "max": 5.0}}, {"id": "logS", "kind": "continuous", "category": "Physicochemical Properties", "percentile": 6.902, "value": -5.755, "domain": {"min": -12.0, "max": 2.0}, "acceptance": {"min": 0.0001}}, {"id": "nHA", "kind": "continuous", "category": "Physicochemical Properties", "percentile": 59.112, "value": 5.0, "domain": {"min": 0.0, "max": 20.0}, "acceptance": {"min": 0.0, "max": 12.0}}, {"id": "nHD", "kind": "continuous", "category": "Physicochemical Properties", "percentile": 77.259, "value": 3.0, "domain": {"min": 0.0, "max": 10.0}, "acceptance": {"min": 0.0, "max": 7.0}}, {"id": "Stereo Centers", "kind": "continuous", "category": "Physicochemical Properties", "percentile": 22.489, "value": 0.0, "domain": {"min": 0.0, "max": 10.0}, "acceptance": {"min": 0.0, "max": 2.0}}, {"id": "TPSA", "kind": "continuous", "category": "Physicochemical Properties", "percentile": 79.837, "value": 126.01, "domain": {"min": 0.0, "max": 300.0}, "acceptance": {"min": 0.0, "max": 140.0}}, {"id": "Caco-2 Perm.", "kind": "continuous", "category": "Absorption", "percentile": 34.742, "value": -5.238, "domain": {"min": -8.0, "max": 1.0}, "acceptance": {"min": -5.0}}, {"id": "PAMPA", "kind": "classification", "category": "Absorption", "percentile": 48.468, "probability": 0.733}, {"id": "Pgp inhib.", "kind": "classification", "category": "Absorption", "percentile": 66.266, "probability": 0.29}, {"id": "HIA", "kind": "classification", "category": "Absorption", "percentile": 49.632, "probability": 0.996}, {"id": "F50%", "kind": "classification", "category": "Absorption", "percentile": 55.797, "probability": 0.829}, {"id": "Hydration Free Energy", "kind": "continuous", "category": "Absorption", "percentile": 26.328, "value": -12.213, "domain": {"min": -30.0, "max": 5.0}, "acceptance": {"min": -10.0}}, {"id": "Lipophilicity", "kind": "continuous", "category": "Absorption", "percentile": 59.131, "value": 1.946, "domain": {"min": -2.0, "max": 8.0}, "acceptance": {"min": 0.0, "max": 3.0}}, {"id": "BBB", "kind": "classification", "category": "Distribution", "percentile": 54.246, "probability": 0.784}, {"id": "PPB", "kind": "continuous", "category": "Distribution", "percentile": 51.144, "value": 76.383, "domain": {"min": 0.0, "max": 100.0}, "acceptance": {"max": 90.0}}, {"id": "VDss", "kind": "continuous", "category": "Distribution", "percentile": 12.524, "value": -3.859, "domain": {"min": 0.0, "max": 50.0}, "acceptance": {"min": 0.04, "max": 20.0}}, {"id": "CYP1A2 inhib.", "kind": "classification", "category": "Metabolism", "percentile": 78.596, "probability": 0.361}, {"id": "CYP2C9 inhib.", "kind": "classification", "category": "Metabolism", "percentile": 83.831, "probability": 0.327}, {"id": "CYP2C19 inhib.", "kind": "classification", "category": "Metabolism", "percentile": 76.037, "probability": 0.353}, {"id": "CYP2D6 inhib.", "kind": "classification", "category": "Metabolism", "percentile": 57.891, "probability": 0.078}, {"id": "CYP3A4 inhib.", "kind": "classification", "category": "Metabolism", "percentile": 82.745, "probability": 0.566}, {"id": "CYP2C9 substr.", "kind": "classification", "category": "Metabolism", "percentile": 64.327, "probability": 0.211}, {"id": "CYP2D6 substr.", "kind": "classification", "category": "Metabolism", "percentile": 52.695, "probability": 0.116}, {"id": "CYP3A4 substr.", "kind": "classification", "category": "Metabolism", "percentile": 52.811, "probability": 0.517}, {"id": "LD50", "kind": "continuous", "category": "Toxicity", "percentile": 54.944, "value": 2.602, "domain": {"min": 0.0, "max": 5.0}, "acceptance": {"min": 1.5}}, {"id": "AMES Toxicity", "kind": "classification", "category": "Toxicity", "percentile": 94.921, "probability": 0.81}, {"id": "DILI", "kind": "classification", "category": "Toxicity", "percentile": 84.413, "probability": 0.922}, {"id": "hERG blockers", "kind": "classification", "category": "Toxicity", "percentile": 75.145, "probability": 0.753}, {"id": "Carcinogenicity", "kind": "classification", "category": "Toxicity", "percentile": 93.059, "probability": 0.603}, {"id": "ClinTox", "kind": "classification", "category": "Toxicity", "percentile": 61.342, "probability": 0.158}, {"id": "Skin Reaction", "kind": "classification", "category": "Toxicity", "percentile": 74.447, "probability": 0.686}, {"id": "NR-AR-LBD", "kind": "classification", "category": "Tox21 Pathways", "percentile": 54.789, "probability": 0.013}, {"id": "NR-AR", "kind": "classification", "category": "Tox21 Pathways", "percentile": 80.38, "probability": 0.067}, {"id": "NR-AhR", "kind": "classification", "category": "Tox21 Pathways", "percentile": 98.953, "probability": 0.894}, {"id": "NR-Aromatase", "kind": "classification", "category": "Tox21 Pathways", "percentile": 72.431, "probability": 0.095}, {"id": "NR-ER-LBD", "kind": "classification", "category": "Tox21 Pathways", "percentile": 46.607, "probability": 0.016}, {"id": "NR-ER", "kind": "classification", "category": "Tox21 Pathways", "percentile": 82.629, "probability": 0.223}, {"id": "NR-PPAR-gamma", "kind": "classification", "category": "Tox21 Pathways", "percentile": 61.652, "probability": 0.011}, {"id": "SR-ARE", "kind": "classification", "category": "Tox21 Pathways", "percentile": 83.637, "probability": 0.501}, {"id": "SR-ATAD5", "kind": "classification", "category": "Tox21 Pathways", "percentile": 92.865, "probability": 0.171}, {"id": "SR-HSE", "kind": "classification", "category": "Tox21 Pathways", "percentile": 71.423, "probability": 0.041}, {"id": "SR-MMP", "kind": "classification", "category": "Tox21 Pathways", "percentile": 88.949, "probability": 0.593}, {"id": "SR-p53", "kind": "classification", "category": "Tox21 Pathways", "percentile": 77.356, "probability": 0.116}, {"id": "Half-life", "kind": "continuous", "category": "Excretion", "percentile": 71.307, "value": 24.708, "domain": {"min": -3.0, "max": 3.0}, "acceptance": {"min": 2.0, "max": 24.0}}, {"id": "Hepatocyte Clear.", "kind": "continuous", "category": "Excretion", "percentile": 46.917, "value": 33.184, "domain": {"min": 0.0, "max": 200.0}, "acceptance": {"max": 50.0}}, {"id": "Microsomal Clear.", "kind": "continuous", "category": "Excretion", "percentile": 28.461, "value": -0.211, "domain": {"min": 0.0, "max": 200.0}, "acceptance": {"max": 50.0}}]};
+</script>
+
+<script>
+  const viewer = $3Dmol.createViewer("viewer", { backgroundColor: window.MOLDASH.viewer.background });
+  const sdf = window.MOLDASH.sdf;
+
+  viewer.addModel(sdf, "sdf");
+  viewer.setStyle({}, { stick: { radius: 0.09 }, sphere: { scale: 0.15 } });
+  viewer.zoomTo();
+  viewer.zoom(window.MOLDASH.viewer.zoomOut);
+  viewer.translate(-80, -20);
+  viewer.render();
+
+  function fmtValue(x) {
+    if (typeof x === "number") {
+      if (Number.isInteger(x)) return String(x);
+      return x.toFixed(3);
+    }
+    return String(x);
+  }
+
+  const table = document.getElementById("props");
+  table.innerHTML = window.MOLDASH.properties.map(p => `
+    <tr>
+      <td>${p.name}</td>
+      <td>${fmtValue(p.value)}</td>
+    </tr>
+  `).join("");
+</script>
+
+<script src="admet.js"></script>
+
+</body>
+</html>
