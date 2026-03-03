@@ -1,3 +1,5 @@
+"""https://github.com/deepchem/deepchem/blob/master/examples/tutorials/Introduction_to_Binding_Sites.ipynb"""
+
 import json
 import random
 import webbrowser
@@ -351,3 +353,5 @@ HTML_PATH.write_text(html_content, encoding="utf-8")
 
 print(f"Random SMILES used: {smiles}")
 print(f"Viewer saved to: {HTML_PATH}")
+
+
