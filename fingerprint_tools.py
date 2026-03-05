@@ -78,9 +78,11 @@ def calculate_fp(mol, method='morgan2', nBits=2048, pca=False, as_numpy=False):
     elif method == 'map4':
         from map4 import MAP4Calculator
         if key not in _cache_fp:
-            _cache_fp[key] = MAP4Calculator(nBits)
-        fp = _cache_fp[key].calculate(mol)
-        return np.array(fp) if as_numpy else fp
+            _cache_fp[key] = MAP4Calculator(dimensions=1024)
+        smiles0 = Chem.MolToSmiles(mol, isomericSmiles=False)
+        mol0 = Chem.MolFromSmiles(smiles0)
+        fp = _cache_fp[key].calculate(mol0)
+        return np.asarray(fp) if as_numpy else fp
 
     # MHFP
     elif method in ['mhfp', 'mhfp6']:
@@ -154,32 +156,30 @@ def tanimoto_similarity_matrix(fp_matrix1, fp_matrix2=None):
     return dot / np.maximum(denom, 1e-9)
 
 
-_cache_sim = {}
 def calculate_similarity(fp1, fp2, method='morgan2', nBits=2048):
     """
     Calculate similarity between two fingerprints based on the specified method.
     More info at: https://github.com/cosconatilab/PyRMD/blob/main/PyRMD_v1.03.py
     """
-    key = (method, nBits)
+    method = method.lower()
 
     if method in ['morgan2', 'morgan3', 'maccs', 'rdkit', 'torsion', 'topotorsion', 'avalon', 'atompair']:
         return round(DataStructs.FingerprintSimilarity(fp1, fp2), 3)
 
     elif method == 'map4':
-        # Requires: pip install tmap
-        import tmap as tm
-        if key not in _cache_sim:
-            _cache_sim[key] = tm.Minhash(nBits)
-        enc = _cache_sim[key]
-        return round(1 - enc.get_distance(fp1, fp2), 3)
+        # MAP4 fingerprints are MinHash signatures (integer vectors).
+        # Similarity is the fraction of equal positions in the signature.
+        a = np.asarray(fp1)
+        b = np.asarray(fp2)
+        if a.shape != b.shape:
+            raise ValueError(f"Shape mismatch: {a.shape} vs {b.shape}")
+        return round(float(np.mean(a == b)), 3)
 
     elif method in ['mhfp', 'mhfp6']:
         from mhfp.encoder import MHFPEncoder
-        if key not in _cache_sim:
-            _cache_sim[key] = MHFPEncoder(nBits)
-        mhfp = _cache_sim[key]
-        return round(1 - mhfp.Distance(fp1, fp2), 3)
-
+        enc = MHFPEncoder()
+        return round(1 - enc.distance(fp1, fp2), 3)
+    
     # elif method == 'pubchem':
     #     fp_and = fp1 & fp2
     #     c = fp_and.count
@@ -200,7 +200,8 @@ def calculate_similarity(fp1, fp2, method='morgan2', nBits=2048):
 
         return round(c / (a + b - c), 3)
 
-    raise ValueError(f"Unknown similarity method: {method}")
+    else:
+        raise ValueError(f"Unknown similarity method: {method}")
 
 
 def count_tanimoto(mat1, mat2, block_size=500):
