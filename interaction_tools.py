@@ -35,9 +35,9 @@ for handler in logging.root.handlers[:]:
 logging.basicConfig(level=logging.WARNING)
 
 
-def xml_to_df(xml_data, pdb_id=None, ligand=None, site_id=None):
+def xml_to_df(xml_data, ligand=None, site_id=None):
     """
-    Parse one PLIP BindingSiteReport XML into a tidy DataFrame.
+    Parse PLIP BindingSiteReport XML payloads from a {name: tree} mapping.
     """
     int_type_map = {
         "hydrophobic_interactions": "hydrophobic",
@@ -48,50 +48,94 @@ def xml_to_df(xml_data, pdb_id=None, ligand=None, site_id=None):
         "pi_cation_interactions": "pication",
         "halogen_bonds": "halogen",
         "metal_complexes": "metal"}
-    
-    # Try to detect whether it's a file path or XML content
-    if os.path.exists(xml_data):
-        tree = ET.parse(xml_data)
-        root = tree.getroot()
-    else:
-        # Assume it's an XML string
-        root = ET.fromstring(xml_data)
 
-    interactions_el = root.find("interactions")
+    def _add_meta(meta, key, value):
+        if value is None:
+            return
+        value = str(value).strip()
+        if not value:
+            return
+        if key in meta and meta[key]:
+            if value not in str(meta[key]).split(","):
+                meta[key] = f"{meta[key]},{value}"
+        else:
+            meta[key] = value
 
-    rows = []
-    for category in interactions_el:
-        tag = category.tag  # e.g. "hydrogen_bonds"
-        mapped_type = int_type_map.get(tag, tag)  # map to your custom list
+    def _collect_root_metadata(root, name):
+        meta = {"PDB": name}
+        for attr_name, attr_value in root.attrib.items():
+            _add_meta(meta, f"ROOT_{attr_name.upper()}", attr_value)
 
-        for interaction in category:
-            data = {"INT_TYPE": mapped_type}
-            for elem in interaction:
-                if len(elem) == 0:
-                    # simple leaf
-                    data[elem.tag.upper()] = elem.text
-                elif elem.tag.endswith("coo"):
-                    # coordinates (x,y,z)
-                    for c in elem:
-                        data[f"{elem.tag.upper()}_{c.tag.upper()}"] = c.text
-                elif elem.tag.endswith("list"):
-                    # list of indices
-                    ids = [idx.text for idx in elem.findall("idx")]
-                    data[elem.tag.upper()] = ",".join(ids)
-                else:
-                    data[elem.tag.upper()] = elem.text
+        def walk(elem, prefix=""):
+            key_base = f"{prefix}{elem.tag.upper()}"
+            for attr_name, attr_value in elem.attrib.items():
+                _add_meta(meta, f"{key_base}_{attr_name.upper()}", attr_value)
 
-            # add metadata
-            if site_id:
-                data["SITE_ID"] = site_id
-            if pdb_id:
-                data["PDB_ID"] = pdb_id
-            if ligand:
-                data["LIGAND"] = ligand
+            children = list(elem)
+            if not children:
+                _add_meta(meta, key_base, elem.text)
+                return
 
-            rows.append(data)
+            for child in children:
+                walk(child, f"{key_base}_")
 
-    return pd.DataFrame(rows) if rows else pd.DataFrame()
+        for child in root:
+            if child.tag == "interactions":
+                continue
+            walk(child)
+
+        if site_id:
+            meta["SITE_ID"] = site_id
+        if ligand:
+            meta["LIGAND"] = ligand
+        return meta
+
+    dfs = []
+    for name, tree in xml_data.items():
+        if tree is None or (isinstance(tree, str) and not tree.strip()):
+            dfs.append(pd.DataFrame([{"PDB": name}]))
+            continue
+
+        try:
+            root = ET.fromstring(tree)
+        except (ET.XMLSyntaxError, TypeError, ValueError):
+            dfs.append(pd.DataFrame([{"PDB": name}]))
+            continue
+
+        root_meta = _collect_root_metadata(root, name)
+        interactions_el = root.find("interactions")
+        if interactions_el is None:
+            dfs.append(pd.DataFrame([root_meta]))
+            continue
+
+        rows = []
+        for category in interactions_el:
+            tag = category.tag  # e.g. "hydrogen_bonds"
+            mapped_type = int_type_map.get(tag, tag)  # map to your custom list
+
+            for interaction in category:
+                data = dict(root_meta)
+                data["INT_TYPE"] = mapped_type
+                for elem in interaction:
+                    if len(elem) == 0:
+                        # simple leaf
+                        data[elem.tag.upper()] = elem.text
+                    elif elem.tag.endswith("coo"):
+                        # coordinates (x,y,z)
+                        for c in elem:
+                            data[f"{elem.tag.upper()}_{c.tag.upper()}"] = c.text
+                    elif elem.tag.endswith("list"):
+                        # list of indices
+                        ids = [idx.text for idx in elem.findall("idx")]
+                        data[elem.tag.upper()] = ",".join(ids)
+                    else:
+                        data[elem.tag.upper()] = elem.text
+
+                rows.append(data)
+
+        dfs.append(pd.DataFrame(rows) if rows else pd.DataFrame([root_meta]))
+
+    return pd.concat(dfs, ignore_index=True) if dfs else pd.DataFrame()
 
 
 def generate_pymol(complex, ligand, pdb_id, site, pdb_file,
@@ -134,10 +178,10 @@ def get_interactions(pdb_file, lig_id=None, xml_outdir=None,
     With lig_id = None, process all ligands in the structure.
     Optionally generates PyMOL session or PDB binding site files.
     """
+    pdb_id = Path(pdb_file).stem.upper()
     xml_data = {}
-    try:
-        pdb_id = Path(pdb_file).stem.upper()
 
+    try:
         complex = PDBComplex()
         complex.load_pdb(pdb_file)
 
@@ -146,9 +190,10 @@ def get_interactions(pdb_file, lig_id=None, xml_outdir=None,
             if lig_id else complex.ligands)
         if not ligands_to_analyse:
             # logger.warning(f"No ligand found matching {lig_id} in {pdb_id}")
-            return {}
+            raise Exception
         
         for ligand in ligands_to_analyse:
+            basename = f"{pdb_id}-{ligand.hetid}-{ligand.position}-{ligand.chain}"
             complex.interaction_sets = {}
             complex.characterize_complex(ligand)
 
@@ -156,8 +201,6 @@ def get_interactions(pdb_file, lig_id=None, xml_outdir=None,
                 binding_site = BindingSiteReport(plip_obj)
                 xml_element = binding_site.generate_xml()
                 xml_string = ET.tostring(xml_element, encoding="unicode")
-
-                basename = f"{pdb_id}-{ligand.hetid}-{ligand.position}-{ligand.chain}"
                 xml_data[basename] = xml_string
 
                 if xml_outdir:
@@ -175,11 +218,12 @@ def get_interactions(pdb_file, lig_id=None, xml_outdir=None,
                         generate_pymol(complex, ligand, pdb_id, site, pdb_file,
                             pdb_outdir=pdb_outdir, pse_outdir=pse_outdir)
 
-        return xml_data
-
     except Exception as exc:
         # logger.error(f"Error analysing {pdb_id}: {exc}")
-        return {}
+        basename = f"{pdb_id}---"
+        xml_data[basename] = ""
+    
+    return xml_data
 
 
 def read_interaction_files(indir):
@@ -246,18 +290,18 @@ def harmonise_interactions(df_int):
     df_int['LIGATOMIDX'] = ligatomidx
     df_int['PROTATOMIDX'] = protatomidx
 
-    col_map = {"PDB": "PDB", "RESNR": "RESNUM",
-        "RESTYPE": "RESNAME", "RESCHAIN": "RESCHAIN",
-        "RESNR_LIG": "LIGNUM", "RESTYPE_LIG": "LIGNAME",
-        "RESCHAIN_LIG": "LIGCHAIN", "PROTATOMIDX": "PROTATOMIDX",
-        "LIGATOMIDX": "LIGATOMIDX", "INT_TYPE": "INT_TYPE", "DIST": "DIST"}
-    df_int = df_int[[k for k in col_map.keys()]].rename(columns=col_map)
+    # col_map = {"PDB": "PDB", "RESNR": "RESNUM",
+    #     "RESTYPE": "RESNAME", "RESCHAIN": "RESCHAIN",
+    #     "RESNR_LIG": "LIGNUM", "RESTYPE_LIG": "LIGNAME",
+    #     "RESCHAIN_LIG": "LIGCHAIN", "PROTATOMIDX": "PROTATOMIDX",
+    #     "LIGATOMIDX": "LIGATOMIDX", "INT_TYPE": "INT_TYPE", "DIST": "DIST"}
+    # df_int = df_int[[k for k in col_map.keys()]].rename(columns=col_map)
 
-    # Final check for missing values
-    if df_int.isna().any().any():
-        raise ValueError("something went wrong in harmonisation")
+    # # Final check for missing values
+    # if df_int.isna().any().any():
+    #     raise ValueError("something went wrong in harmonisation")
 
-    return df_int
+    return df_int.replace({np.nan: None})
 
 
 def analyse_pdb_files(pdb_files, lig_id=None, xml_outdir=None,
@@ -267,18 +311,18 @@ def analyse_pdb_files(pdb_files, lig_id=None, xml_outdir=None,
         xml_results = list(tqdm(executor.map(get_interactions, pdb_files, repeat(lig_id),
             repeat(xml_outdir), repeat(pdb_outdir), repeat(pse_outdir)),
             total=len(pdb_files), desc="Analysing interactions"))
-
+    
     df_list = []
     for xml_data in xml_results:
-        for name, tree in xml_data.items():
-            df = xml_to_df(tree)
-            df['PDB'] = name.split(':')[0]
-            df_list.append(df)
+        df = xml_to_df(xml_data)
+        df_list.append(df)
     df_int = pd.concat(df_list, ignore_index=True)
 
+    df_int = df_int.sort_values(by='PDB').reset_index(drop=True)
     df_int = harmonise_interactions(df_int)
-    df_int["RESID"] = df_int["RESNAME"] + df_int["RESNUM"]
-    df_int = df_int[["PDB", "RESID", "LIGNAME", "INT_TYPE"]].fillna("NA")
+    df_int["RESID"] = df_int["RESTYPE"] + df_int["RESNR"]
+    df_int = df_int[["PDB", "RESID", "IDENTIFIERS_HETID", "INT_TYPE"]]
+    df_int = df_int.rename(columns={"IDENTIFIERS_HETID": "LIGNAME"})
     return df_int
 
 
