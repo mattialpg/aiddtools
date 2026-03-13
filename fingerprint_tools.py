@@ -32,6 +32,9 @@ def fp_to_numpy(fp, nBits=None):
 # Cache to store fingerprint generators
 _cache_fp = {}
 def calculate_fp(mol, method='morgan2', nBits=2048, pca=False, as_numpy=False):
+    """ Usage: df['FP_method'] = df['ROMol'].parallel_map(
+            lambda x: fpt.calculate_fp(x, method, as_numpy=True))
+    """ 
     method = method.lower()
     key = (method, nBits)
 
@@ -77,8 +80,9 @@ def calculate_fp(mol, method='morgan2', nBits=2048, pca=False, as_numpy=False):
     # MAP4
     elif method == 'map4':
         from map4 import MAP4Calculator
+        nBits=1024; as_numpy=True  # Enforce!
         if key not in _cache_fp:
-            _cache_fp[key] = MAP4Calculator(dimensions=1024)
+            _cache_fp[key] = MAP4Calculator(dimensions=nBits)
         smiles0 = Chem.MolToSmiles(mol, isomericSmiles=False)
         mol0 = Chem.MolFromSmiles(smiles0)
         fp = _cache_fp[key].calculate(mol0)

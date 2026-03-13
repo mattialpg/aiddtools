@@ -1,4 +1,3 @@
-
 <!doctype html>
 <html>
 <head>
@@ -6,19 +5,680 @@
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
 <title>Molecule viewer</title>
 
-<link rel="stylesheet" href="style.css">
-<link rel="stylesheet" href="admet_style.css">
-
 <script src="https://3dmol.csb.pitt.edu/build/3Dmol-min.js"></script>
+<style>
+:root{
+  --bg:#070A10;
+  --fg:#d7dde5;
+  --card-bg:rgba(255,255,255,.035);
+  --card-border:rgba(255,255,255,.10);
+  --muted:rgba(255,255,255,.55);
+}
+
+*{box-sizing:border-box}
+
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--fg);
+  font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+  overflow:hidden;
+}
+
+#viewer{
+  position:fixed;
+  inset:0;
+  width:100vw;
+  height:100vh;
+  touch-action:none;
+}
+
+/* Bottom-left molecule title */
+#mol-title{
+  position:fixed;
+  left:45px;
+  bottom:40px;
+  z-index:5;
+  pointer-events:none;
+}
+
+.mol-name{
+  font-size:30px;
+  font-style:italic;
+  font-weight:400;
+  font-family:"Times New Roman",Times,serif;
+  color:#fff;
+}
+
+.mol-meta{
+  margin-top:4px;
+  font-size:11px;
+  letter-spacing:1px;
+  text-transform:uppercase;
+  color:var(--muted);
+}
+
+/* Property panel */
+#property-panel{
+  position:fixed;
+  top:150px;
+  right:18px;
+  width:320px;
+  max-width:calc(100vw - 36px);
+  max-height:calc(100vh - 36px);
+  overflow:auto;
+  z-index:10;
+}
+
+.card{
+  background:var(--card-bg);
+  border:1px solid var(--card-border);
+  border-radius:14px;
+  padding:12px;
+  backdrop-filter:blur(14px) saturate(115%);
+  -webkit-backdrop-filter:blur(14px) saturate(115%);
+  box-shadow:0 20px 60px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.06);
+  overflow:hidden;
+}
+
+.title{
+  margin:0 0 6px 0;
+  font-size:11px;
+  opacity:.75;
+}
+
+
+/* Property table */
+table{
+  width:100%;
+  border-collapse:collapse;
+  font-size:12px;
+}
+
+td{
+  padding:4px 6px;
+}
+
+td:first-child{
+  padding-left:0;
+  opacity:.85;
+  text-align:left;
+}
+
+td:last-child{
+  padding-right:0;
+  text-align:right;
+  font-variant-numeric:tabular-nums;
+  color:#fff;
+  font-weight:600;
+}
+</style>
+<style>
+/* =========================
+   ADMET panel layout
+   ========================= */
+
+#admet-panel{
+  position:fixed;
+  left:50%;
+  bottom:24px;
+  transform:translateX(-50%);
+  width:min(550px, calc(100vw - 36px));
+  z-index:30;
+  transition: width 580ms ease, bottom 580ms ease, max-height 580ms ease;
+}
+
+/* Expanded panel tweaks */
+#admet-panel.admet-expanded{
+  width:min(1500px, calc(100vw - 50px));
+  height:93vh;
+  --card-bg: rgba(29, 31, 37, 0.5);
+}
+
+#admet-panel.admet-expanded .card{
+  height:100%;
+  display:flex;
+  flex-direction:column;
+}
+
+/* ADMET list */
+#admet{
+  max-height:100px;
+  overflow:auto;
+  padding-left:10px;
+  padding-right:20px;
+}
+
+/* Expanded panel content area */
+#admet-panel.admet-expanded #admet{
+  max-height:none;
+  height:calc(93vh - 56px);
+  overflow:auto;
+}
+
+/* =========================
+   Controls
+   ========================= */
+
+/* header wrapper used when title and toggle are placed together */
+.admet-header{
+  display:flex;
+  align-items:center;
+  width:100%;
+  padding:8px 10px;        /* header height and right padding */
+  padding-left:10px;       /* align left edge with #admet list padding */
+  box-sizing:border-box;
+  gap:12px;
+}
+
+/* when title and toggle share the header, push the controls to the right edge */
+.admet-header .admet-controls{
+  margin-left:auto;
+}
+
+/* ensure controls sit beside the panel title rather than on a separate line */
+.admet-controls{
+  display:inline-flex;              /* inline so it stays beside title */
+  justify-content:flex-end;          /* align icon to right when together */
+  margin-bottom:0;                  /* no extra gap when inline */
+  margin-top:0;                      /* remove negative offset; header controls are vertically centered */
+  align-items:center;               /* vertical center in case of variable height */
+}
+
+/* heading/title inside panel should also be inline-block for side-by-side layout */
+#admet-panel .admet-title,
+#admet-panel h1,
+#admet-panel h2,
+#admet-panel .title {
+  display:inline-block;
+  vertical-align:middle;
+  margin-right:8px;                 /* spacing before the toggle */
+}
+
+.admet-toggle {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 6px 4px;           /* sane padding so icon centers vertically in taller header */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.85;
+  transition: opacity .2s ease, transform .2s ease;
+}
+
+.admet-toggle:hover {
+  opacity: 0.8;
+}
+
+.admet-toggle-icon {
+  width: 15px;
+  height: 15px;
+  display: block;
+  filter: invert(1);
+  opacity:0.85;
+}
+
+.admet-toggle.active {
+  transform: scale(1.05);
+}
+
+/* =========================
+   Widget base
+   ========================= */
+
+.risk2-inline{
+  display:flex;
+  align-items:center;
+  gap:6px;
+}
+
+.risk2-inline-title{
+  flex:1 1 auto;
+  min-width:0;
+  white-space:normal;
+  overflow:hidden;
+  display:-webkit-box;
+  -webkit-line-clamp:2;
+  -webkit-box-orient:vertical;
+  line-height:1.2;
+  font-size:12px;
+  color:rgba(255,255,255,.92);
+}
+
+.risk2-stage2{
+  position:relative;
+  flex:0 0 360px;
+  min-width:0;
+}
+
+/* Probability top scale */
+.risk2-topscale{
+  position:relative;
+  height:22px;
+  margin-bottom:5px;
+  color:var(--muted);
+  font-size:14px;
+  letter-spacing:1px;
+}
+
+.risk2-topscale .z{
+  position:absolute;
+  top:0;
+  transform:translateX(-50%);
+  white-space:nowrap;
+}
+
+/* Bar track */
+.risk2-track{
+  position:relative;
+  height:6px;
+  border-radius: 999px;
+  border:1px solid var(--card-border);
+  background:rgba(255,255,255,.06);
+}
+
+.risk2-barclip{
+  position:absolute;
+  inset:0;
+  border-radius:10px;
+  overflow:hidden;
+}
+
+.risk2-gradient{
+  position:absolute;
+  inset:0;
+  background:linear-gradient(
+    90deg,
+    #b91c1c 0%,
+    #ef4444 20%,
+    #facc15 50%,
+    #84cc16 75%,
+    #15803d 100%
+  );
+}
+
+.risk2-fill{
+  position:absolute;
+  top:0;
+  right:0;
+  height:100%;
+  background:rgba(9,9,11,.85);
+  pointer-events:none;
+  --notch: 8px;
+  --soft: 0.4px;
+  --cx: calc(-0.15 * var(--notch));
+  -webkit-mask:
+    linear-gradient(#000 0 0),
+    radial-gradient(circle at var(--cx) 50%,
+      transparent calc(var(--notch) - var(--soft)),
+      #000 calc(var(--notch) + var(--soft))
+    );
+  -webkit-mask-composite: source-in;
+  mask:
+    linear-gradient(#000 0 0),
+    radial-gradient(circle at var(--cx) 50%,
+      transparent calc(var(--notch) - var(--soft)),
+      #000 calc(var(--notch) + var(--soft))
+    );
+  mask-composite: intersect;
+}
+
+/* Separators (used for probability endpoints) */
+.risk2-sep{
+  position:absolute;
+  top:-30px;
+  bottom:-6px;
+  width:2px;
+  background:rgba(255,255,255,.14);
+  transform:translateX(-1px);
+}
+
+/* Percentile marker and label */
+.risk2-percentile{
+  position:absolute;
+  top:-8px;
+  bottom:-8px;
+  width:3px;
+  transform:translateX(-50%);
+  background:rgba(255,255,255,.95);
+  border-radius:3px;
+  box-shadow:0 0 8px rgba(255,255,255,.7), 0 0 18px rgba(59,130,246,.35);
+}
+
+.risk2-percentile-label{
+  position:absolute;
+  right:0;
+  bottom:-28px;
+  transform:translateX(50%);
+  text-align:center;
+  line-height:1.1;
+  white-space:nowrap;
+}
+
+.risk2-percentile-label .v{
+  font-size:12px;
+  color:rgba(255,255,255,.85);
+}
+
+.risk2-percentile-label .k{
+  font-size:10px;
+  color:var(--muted);
+}
+
+/* Knob */
+.risk2-knob{
+  --knob-inset:25%;
+  --knob-border:1px;
+  position:absolute;
+  top:50%;
+  transform:translate(-50%,-50%);
+  width:14px;
+  height:14px;
+  border-radius:999px;
+  background:rgba(255,255,255,.10);
+  border:var(--knob-border) solid rgba(255,255,255,1);
+}
+
+.risk2-knob::after{
+  content:"";
+  position:absolute;
+  top:50%;
+  left:50%;
+  width:calc(100% - (2 * var(--knob-inset)));
+  height:calc(100% - (2 * var(--knob-inset)));
+  transform:translate(-50%,-50%);
+  border-radius:999px;
+  background:rgba(255,255,255,1);
+}
+
+/* Probability bottom scale */
+.risk2-bottomscale{
+  position:relative;
+  height:24px;
+  margin-top:0;
+  color:var(--muted);
+  font-size:11px;
+}
+
+.risk2-bottomscale span{
+  position:absolute;
+  bottom:0;
+  transform:translateX(-50%);
+  white-space:nowrap;
+}
+
+.risk2-bottomscale span:first-child{ transform:translateX(0); }
+.risk2-bottomscale span:last-child{ transform:translateX(-100%); }
+
+/* =========================
+   Compact mode
+   ========================= */
+#admet-panel:not(.admet-expanded) .admet-header{
+  padding-top:0px;
+  padding-bottom:6px;
+}
+
+#admet.admet-compact .admet-entry{
+  padding-left:0px;
+  padding-right:8px;
+}
+
+#admet.admet-compact .risk2-inline-title{
+  font-size:12px;
+  font-weight:400;
+  color:rgba(255,255,255,.85);
+  opacity:.85;
+  letter-spacing:0;
+  text-transform:none;
+  line-height:1.2;
+}
+
+#admet.admet-compact .risk2-topscale,
+#admet.admet-compact .risk2-bottomscale,
+#admet.admet-compact .risk2-percentile-label{
+  display:none;
+}
+
+#admet.admet-compact .risk2-percentile{
+  top:-3px;
+  bottom:-3px;
+}
+
+#admet.admet-compact .risk2-sep{
+  top:-4px;
+  bottom:-4px;
+  background:rgba(255,255,255,.18);
+}
+
+#admet.admet-compact .risk2-topscale{
+  height:0;
+  margin:0;
+}
+
+#admet.admet-compact .risk2-bottomscale{
+  height:0;
+  margin:0;
+}
+
+/* =========================
+   Non-compact adjustments
+   ========================= */
+
+#admet:not(.admet-compact) .risk2-sep{
+  background:none;
+  border-left:2px dashed rgba(255,255,255,.22);
+  width:0;
+  transform:translateX(0);
+}
+
+#admet:not(.admet-compact) .risk2-track{
+  height:14px;
+  border-radius:12px;
+}
+
+#admet:not(.admet-compact) .risk2-knob{
+  width:18px;
+  height:18px;
+  --knob-inset:30%;
+}
+
+/* =========================
+   Expanded mode layout
+   ========================= */
+
+#admet:not(.admet-compact) .admet-entry{
+  border:1px solid rgba(255,255,255,.12);
+  border-radius:20px;
+  padding:14px 16px;
+  background:rgba(38, 42, 49, 0.7);
+}
+
+.admet-entry{
+  margin-bottom:14px;
+}
+
+.admet-group-title{
+  margin:12px 0 8px 0;
+  padding-top:8px;
+  font-size:11px;
+  letter-spacing:1px;
+  text-transform:uppercase;
+  color:rgba(255,255,255,.75);
+  border-top:1px solid rgba(255,255,255,.10);
+}
+
+#admet.admet-compact .admet-group-title{
+  display:none;
+}
+
+#admet-panel.admet-expanded .admet-title,
+#admet-panel.admet-expanded h1,
+#admet-panel.admet-expanded h2,
+#admet-panel.admet-expanded .title{
+  font-size:18px;              /* increase size */
+  font-weight:600;             /* semibold */
+  color:rgba(255,255,255,1);   /* fully white */
+  letter-spacing:0.5px;        /* optional slight emphasis */
+}
+
+/* Layout: default collapsed = single column */
+.admet-group-grid{
+  display:block;
+}
+
+/* Expanded: 3 columns */
+#admet:not(.admet-compact) .admet-group-grid{
+  display:grid;
+  grid-template-columns:repeat(3, 1fr);
+  gap:14px;
+}
+
+/* In grid layout, the per-entry margin is not needed */
+#admet:not(.admet-compact) .admet-entry{
+  margin-bottom:0;
+}
+
+@media (max-width:900px){
+  #admet:not(.admet-compact) .admet-group-grid{
+    grid-template-columns:1fr;
+  }
+}
+
+/* =========================
+   Scrollbar
+   ========================= */
+
+#admet::-webkit-scrollbar{
+  width:8px;
+}
+
+#admet::-webkit-scrollbar-track{
+  background:transparent;
+}
+
+#admet::-webkit-scrollbar-thumb{
+  background:rgba(255,255,255,.25);
+  border-radius:8px;
+}
+
+/* =========================
+   Continuous endpoint styling
+   ========================= */
+
+/* Gradient with acceptance window */
+.range-gradient{
+  position:absolute;
+  inset:0;
+}
+
+/* Continuous bar: green inside [--acc-min, --acc-max], gradient outside */
+.continuous-track .range-gradient{
+  background: linear-gradient(
+    to right,
+    #dc2626 0%,
+    #dc2626 var(--left-red),
+    #facc15 var(--left-mid),
+    #16a34a var(--acc-min),
+    #16a34a var(--acc-max),
+    #facc15 var(--right-mid),
+    #dc2626 var(--right-red),
+    #dc2626 100%
+  );
+}
+
+/* Shared scale behaviour for continuous endpoints */
+.risk2-topscale-continuous,
+.risk2-bottomscale-continuous{
+  position:relative;
+  color:var(--muted);
+  font-size:11px;
+}
+
+.risk2-topscale-continuous span,
+.risk2-bottomscale-continuous span{
+  position:absolute;
+  transform:translateX(-50%);
+  white-space:nowrap;
+}
+
+/* Edge alignment: min flush-left, max flush-right */
+.risk2-topscale-continuous span:first-child,
+.risk2-bottomscale-continuous span:first-child{
+  transform:translateX(0);
+}
+
+.risk2-topscale-continuous span:last-child,
+.risk2-bottomscale-continuous span:last-child{
+  transform:translateX(-100%);
+}
+
+/* Top scale layout (tight gap above bar) */
+.risk2-topscale-continuous{
+  height:20px;
+  margin:0 0 2px 0;
+}
+
+.risk2-topscale-continuous span{
+  top:0;
+}
+
+/* Top ticks (exclude min and max) */
+.risk2-topscale-continuous span::after{
+  content:"";
+  position:absolute;
+  bottom:-8px;
+  left:50%;
+  width:1px;
+  height:6px;
+  transform:translateX(-50%);
+  background:rgba(255,255,255,.22);
+}
+
+.risk2-topscale-continuous span:first-child::after,
+.risk2-topscale-continuous span:last-child::after{
+  display:none;
+}
+
+/* Bottom scale layout */
+.risk2-bottomscale-continuous{
+  height:24px;
+  margin-top:0;
+}
+
+.risk2-bottomscale-continuous span{
+  bottom:0;
+}
+
+/* Bottom ticks (exclude min and max) */
+.risk2-bottomscale-continuous span::before{
+  content:"";
+  position:absolute;
+  top:-8px;
+  left:50%;
+  width:1px;
+  height:6px;
+  transform:translateX(-50%);
+  background:rgba(255,255,255,.22);
+}
+
+.risk2-bottomscale-continuous span:first-child::before,
+.risk2-bottomscale-continuous span:last-child::before{
+  display:none;
+}
+</style>
 </head>
 
 <body>
 
 <div id="viewer"></div>
+<div id="viewer-error" style="display:none;position:fixed;left:16px;top:16px;z-index:99;padding:10px 12px;background:rgba(185,28,28,.9);color:#fff;border-radius:8px;font-size:13px;">
+  3D viewer failed to load (3Dmol.js unavailable). Check internet/CDN access.
+</div>
 
 <div id="mol-title">
-  <div class="mol-name">48164</div>
-  <div class="mol-meta">44 atoms · small molecule</div>
+  <div class="mol-name">J000916185_0023</div>
+  <div class="mol-meta">39 atoms · small molecule</div>
 </div>
 
 <div id="property-panel">
@@ -36,19 +696,24 @@
 </div>
 
 <script>
-  window.MOLDASH = {"viewer": {"background": "#070A10", "stickRadius": 0.08, "sphereScale": 0.35, "zoomOut": 0.9}, "molecule": {"name": "48164", "smiles": "Nc1ccc(NC(=O)CCC(=O)N=NC=C2C(=O)Nc3ccccc32)cc1", "atomCount": 44}, "sdf": "\n     RDKit          3D\n\n 44 46  0  0  0  0  0  0  0  0999 V2000\n   -7.5609   -1.7282    2.8989 N   0  0  0  0  0  0  0  0  0  0  0  0\n   -6.5514   -1.2612    2.0025 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -5.5735   -0.3623    2.4452 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -4.5881    0.0971    1.5666 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -4.5631   -0.3458    0.2329 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.5815    0.1388   -0.6986 N   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.2272    0.4566   -0.3437 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.7396    0.0561    0.7491 O   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.3499    1.1889   -1.3129 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.8373    0.2428   -2.4011 C   0  0  0  0  0  0  0  0  0  0  0  0\n    0.1320    0.9548   -3.3028 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.2986    1.5454   -4.3282 O   0  0  0  0  0  0  0  0  0  0  0  0\n    1.5281    1.0228   -2.9957 N   0  0  0  0  0  0  0  0  0  0  0  0\n    2.0050    0.4717   -1.9551 N   0  0  0  0  0  0  0  0  0  0  0  0\n    3.3991    0.5487   -1.6648 C   0  0  0  0  0  0  0  0  0  0  0  0\n    3.8960   -0.0299   -0.5709 C   0  0  0  0  0  0  0  0  0  0  0  0\n    3.1856   -0.8032    0.4526 C   0  0  0  0  0  0  0  0  0  0  0  0\n    1.9477   -1.0347    0.4729 O   0  0  0  0  0  0  0  0  0  0  0  0\n    4.0901   -1.2755    1.4466 N   0  0  0  0  0  0  0  0  0  0  0  0\n    5.3640   -0.7891    1.0366 C   0  0  0  0  0  0  0  0  0  0  0  0\n    6.5768   -0.9894    1.6929 C   0  0  0  0  0  0  0  0  0  0  0  0\n    7.7359   -0.4198    1.1414 C   0  0  0  0  0  0  0  0  0  0  0  0\n    7.6632    0.3371   -0.0447 C   0  0  0  0  0  0  0  0  0  0  0  0\n    6.4318    0.5259   -0.6950 C   0  0  0  0  0  0  0  0  0  0  0  0\n    5.2917   -0.0534   -0.1316 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -5.5541   -1.2334   -0.2084 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -6.5372   -1.6942    0.6723 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -8.2972   -2.3955    2.5740 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -7.5664   -1.4299    3.9015 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -5.5807   -0.0086    3.4688 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.8656    0.8186    1.9233 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.8437    0.1847   -1.7083 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.9293    2.0126   -1.7766 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.4900    1.6364   -0.7660 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.3462   -0.6438   -1.9448 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.6923   -0.1268   -3.0058 H   0  0  0  0  0  0  0  0  0  0  0  0\n    4.0563    1.0821   -2.3402 H   0  0  0  0  0  0  0  0  0  0  0  0\n    3.8682   -1.8689    2.2725 H   0  0  0  0  0  0  0  0  0  0  0  0\n    6.6242   -1.5758    2.5992 H   0  0  0  0  0  0  0  0  0  0  0  0\n    8.6905   -0.5629    1.6302 H   0  0  0  0  0  0  0  0  0  0  0  0\n    8.5608    0.7752   -0.4559 H   0  0  0  0  0  0  0  0  0  0  0  0\n    6.3750    1.1013   -1.6085 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -5.5589   -1.5728   -1.2363 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -7.2897   -2.3839    0.3157 H   0  0  0  0  0  0  0  0  0  0  0  0\n  1  2  1  0\n  2  3  2  0\n  3  4  1  0\n  4  5  2  0\n  5  6  1  0\n  6  7  1  0\n  7  8  2  0\n  7  9  1  0\n  9 10  1  0\n 10 11  1  0\n 11 12  2  0\n 11 13  1  0\n 13 14  2  3\n 14 15  1  0\n 15 16  2  3\n 16 17  1  0\n 17 18  2  0\n 17 19  1  0\n 19 20  1  0\n 20 21  2  0\n 21 22  1  0\n 22 23  2  0\n 23 24  1  0\n 24 25  2  0\n  5 26  1  0\n 26 27  2  0\n 27  2  1  0\n 25 16  1  0\n 25 20  1  0\n  1 28  1  0\n  1 29  1  0\n  3 30  1  0\n  4 31  1  0\n  6 32  1  0\n  9 33  1  0\n  9 34  1  0\n 10 35  1  0\n 10 36  1  0\n 15 37  1  0\n 19 38  1  0\n 21 39  1  0\n 22 40  1  0\n 23 41  1  0\n 24 42  1  0\n 26 43  1  0\n 27 44  1  0\nM  END\n\n$$$$\n", "properties": [{"name": "Molecular weight (Da)", "value": 363.37699999999984}, {"name": "cLogP (Crippen)", "value": 2.959500000000001}, {"name": "TPSA (Å²)", "value": 126.00999999999999}, {"name": "H-bond donors", "value": 3}, {"name": "H-bond acceptors", "value": 5}, {"name": "Rotatable bonds", "value": 6}, {"name": "Ring count", "value": 3}, {"name": "Aromatic rings", "value": 2}, {"name": "Heavy atoms", "value": 27}, {"name": "Fraction Csp3", "value": 0.10526315789473684}], "endpoints": [{"id": "QED", "kind": "classification", "category": "Medicinal Chemistry", "percentile": 37.611, "probability": 0.429}, {"id": "Lipinski Rules", "kind": "continuous", "category": "Medicinal Chemistry", "percentile": 63.804, "value": 4.0, "domain": {"min": 0.0, "max": 4.0}, "acceptance": {"min": 0.0, "max": 1.0}}, {"id": "MW", "kind": "continuous", "category": "Physicochemical Properties", "percentile": 56.844, "value": 363.377, "domain": {"min": 0.0, "max": 1000.0}, "acceptance": {"min": 100.0, "max": 600.0}}, {"id": "logP", "kind": "continuous", "category": "Physicochemical Properties", "percentile": 61.187, "value": 2.96, "domain": {"min": -2.0, "max": 8.0}, "acceptance": {"min": 0.0, "max": 5.0}}, {"id": "logS", "kind": "continuous", "category": "Physicochemical Properties", "percentile": 6.902, "value": -5.755, "domain": {"min": -12.0, "max": 2.0}, "acceptance": {"min": 0.0001}}, {"id": "nHA", "kind": "continuous", "category": "Physicochemical Properties", "percentile": 59.112, "value": 5.0, "domain": {"min": 0.0, "max": 20.0}, "acceptance": {"min": 0.0, "max": 12.0}}, {"id": "nHD", "kind": "continuous", "category": "Physicochemical Properties", "percentile": 77.259, "value": 3.0, "domain": {"min": 0.0, "max": 10.0}, "acceptance": {"min": 0.0, "max": 7.0}}, {"id": "Stereo Centers", "kind": "continuous", "category": "Physicochemical Properties", "percentile": 22.489, "value": 0.0, "domain": {"min": 0.0, "max": 10.0}, "acceptance": {"min": 0.0, "max": 2.0}}, {"id": "TPSA", "kind": "continuous", "category": "Physicochemical Properties", "percentile": 79.837, "value": 126.01, "domain": {"min": 0.0, "max": 300.0}, "acceptance": {"min": 0.0, "max": 140.0}}, {"id": "Caco-2 Perm.", "kind": "continuous", "category": "Absorption", "percentile": 34.742, "value": -5.238, "domain": {"min": -8.0, "max": 1.0}, "acceptance": {"min": -5.0}}, {"id": "PAMPA", "kind": "classification", "category": "Absorption", "percentile": 48.468, "probability": 0.733}, {"id": "Pgp inhib.", "kind": "classification", "category": "Absorption", "percentile": 66.266, "probability": 0.29}, {"id": "HIA", "kind": "classification", "category": "Absorption", "percentile": 49.632, "probability": 0.996}, {"id": "F50%", "kind": "classification", "category": "Absorption", "percentile": 55.797, "probability": 0.829}, {"id": "Hydration Free Energy", "kind": "continuous", "category": "Absorption", "percentile": 26.328, "value": -12.213, "domain": {"min": -30.0, "max": 5.0}, "acceptance": {"min": -10.0}}, {"id": "Lipophilicity", "kind": "continuous", "category": "Absorption", "percentile": 59.131, "value": 1.946, "domain": {"min": -2.0, "max": 8.0}, "acceptance": {"min": 0.0, "max": 3.0}}, {"id": "BBB", "kind": "classification", "category": "Distribution", "percentile": 54.246, "probability": 0.784}, {"id": "PPB", "kind": "continuous", "category": "Distribution", "percentile": 51.144, "value": 76.383, "domain": {"min": 0.0, "max": 100.0}, "acceptance": {"max": 90.0}}, {"id": "VDss", "kind": "continuous", "category": "Distribution", "percentile": 12.524, "value": -3.859, "domain": {"min": 0.0, "max": 50.0}, "acceptance": {"min": 0.04, "max": 20.0}}, {"id": "CYP1A2 inhib.", "kind": "classification", "category": "Metabolism", "percentile": 78.596, "probability": 0.361}, {"id": "CYP2C9 inhib.", "kind": "classification", "category": "Metabolism", "percentile": 83.831, "probability": 0.327}, {"id": "CYP2C19 inhib.", "kind": "classification", "category": "Metabolism", "percentile": 76.037, "probability": 0.353}, {"id": "CYP2D6 inhib.", "kind": "classification", "category": "Metabolism", "percentile": 57.891, "probability": 0.078}, {"id": "CYP3A4 inhib.", "kind": "classification", "category": "Metabolism", "percentile": 82.745, "probability": 0.566}, {"id": "CYP2C9 substr.", "kind": "classification", "category": "Metabolism", "percentile": 64.327, "probability": 0.211}, {"id": "CYP2D6 substr.", "kind": "classification", "category": "Metabolism", "percentile": 52.695, "probability": 0.116}, {"id": "CYP3A4 substr.", "kind": "classification", "category": "Metabolism", "percentile": 52.811, "probability": 0.517}, {"id": "LD50", "kind": "continuous", "category": "Toxicity", "percentile": 54.944, "value": 2.602, "domain": {"min": 0.0, "max": 5.0}, "acceptance": {"min": 1.5}}, {"id": "AMES Toxicity", "kind": "classification", "category": "Toxicity", "percentile": 94.921, "probability": 0.81}, {"id": "DILI", "kind": "classification", "category": "Toxicity", "percentile": 84.413, "probability": 0.922}, {"id": "hERG blockers", "kind": "classification", "category": "Toxicity", "percentile": 75.145, "probability": 0.753}, {"id": "Carcinogenicity", "kind": "classification", "category": "Toxicity", "percentile": 93.059, "probability": 0.603}, {"id": "ClinTox", "kind": "classification", "category": "Toxicity", "percentile": 61.342, "probability": 0.158}, {"id": "Skin Reaction", "kind": "classification", "category": "Toxicity", "percentile": 74.447, "probability": 0.686}, {"id": "NR-AR-LBD", "kind": "classification", "category": "Tox21 Pathways", "percentile": 54.789, "probability": 0.013}, {"id": "NR-AR", "kind": "classification", "category": "Tox21 Pathways", "percentile": 80.38, "probability": 0.067}, {"id": "NR-AhR", "kind": "classification", "category": "Tox21 Pathways", "percentile": 98.953, "probability": 0.894}, {"id": "NR-Aromatase", "kind": "classification", "category": "Tox21 Pathways", "percentile": 72.431, "probability": 0.095}, {"id": "NR-ER-LBD", "kind": "classification", "category": "Tox21 Pathways", "percentile": 46.607, "probability": 0.016}, {"id": "NR-ER", "kind": "classification", "category": "Tox21 Pathways", "percentile": 82.629, "probability": 0.223}, {"id": "NR-PPAR-gamma", "kind": "classification", "category": "Tox21 Pathways", "percentile": 61.652, "probability": 0.011}, {"id": "SR-ARE", "kind": "classification", "category": "Tox21 Pathways", "percentile": 83.637, "probability": 0.501}, {"id": "SR-ATAD5", "kind": "classification", "category": "Tox21 Pathways", "percentile": 92.865, "probability": 0.171}, {"id": "SR-HSE", "kind": "classification", "category": "Tox21 Pathways", "percentile": 71.423, "probability": 0.041}, {"id": "SR-MMP", "kind": "classification", "category": "Tox21 Pathways", "percentile": 88.949, "probability": 0.593}, {"id": "SR-p53", "kind": "classification", "category": "Tox21 Pathways", "percentile": 77.356, "probability": 0.116}, {"id": "Half-life", "kind": "continuous", "category": "Excretion", "percentile": 71.307, "value": 24.708, "domain": {"min": -3.0, "max": 3.0}, "acceptance": {"min": 2.0, "max": 24.0}}, {"id": "Hepatocyte Clear.", "kind": "continuous", "category": "Excretion", "percentile": 46.917, "value": 33.184, "domain": {"min": 0.0, "max": 200.0}, "acceptance": {"max": 50.0}}, {"id": "Microsomal Clear.", "kind": "continuous", "category": "Excretion", "percentile": 28.461, "value": -0.211, "domain": {"min": 0.0, "max": 200.0}, "acceptance": {"max": 50.0}}]};
+  window.MOLDASH = {"viewer": {"background": "#070A10", "stickRadius": 0.08, "sphereScale": 0.35, "zoomOut": 0.9}, "molecule": {"name": "J000916185_0023", "smiles": "COC1=NC(SCCCn2nnc3ccccc32)C=CC1", "atomCount": 39}, "sdf": "\n     RDKit          3D\n\n 39 41  0  0  0  0  0  0  0  0999 V2000\n   -4.5939   -2.3302    0.4255 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -5.0799   -1.1021   -0.1047 O   0  0  0  0  0  0  0  0  0  0  0  0\n   -4.2373   -0.0565   -0.4959 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.9427   -0.1713   -0.3898 N   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.0086    0.9059   -0.7346 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.6999    1.9485    0.7361 S   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.6748    0.7365    1.6445 C   0  0  0  0  0  0  0  0  0  0  0  0\n    0.7989    0.8932    1.2664 C   0  0  0  0  0  0  0  0  0  0  0  0\n    1.6726   -0.1042    2.0303 C   0  0  0  0  0  0  0  0  0  0  0  0\n    3.0713    0.0529    1.6416 N   0  0  0  0  0  0  0  0  0  0  0  0\n    3.9562    0.8030    2.2918 N   0  0  0  0  0  0  0  0  0  0  0  0\n    5.1332    0.8042    1.6664 N   0  0  0  0  0  0  0  0  0  0  0  0\n    4.9683    0.0302    0.5779 C   0  0  0  0  0  0  0  0  0  0  0  0\n    5.8870   -0.2813   -0.4196 C   0  0  0  0  0  0  0  0  0  0  0  0\n    5.4437   -1.1055   -1.4735 C   0  0  0  0  0  0  0  0  0  0  0  0\n    4.1110   -1.5843   -1.4999 C   0  0  0  0  0  0  0  0  0  0  0  0\n    3.2091   -1.2456   -0.4719 C   0  0  0  0  0  0  0  0  0  0  0  0\n    3.6899   -0.4336    0.5545 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -2.5720    1.7692   -1.8339 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.8983    1.9105   -1.9704 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -4.8475    1.2111   -1.0321 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -5.4530   -2.9914    0.6603 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -4.0197   -2.1413    1.3573 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -3.9441   -2.8356   -0.3201 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.0562    0.4600   -1.0876 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.0192   -0.3012    1.4478 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.7966    0.9357    2.7305 H   0  0  0  0  0  0  0  0  0  0  0  0\n    0.9251    0.7273    0.1756 H   0  0  0  0  0  0  0  0  0  0  0  0\n    1.1317    1.9273    1.5034 H   0  0  0  0  0  0  0  0  0  0  0  0\n    1.5729    0.0701    3.1240 H   0  0  0  0  0  0  0  0  0  0  0  0\n    1.3414   -1.1441    1.8183 H   0  0  0  0  0  0  0  0  0  0  0  0\n    6.9004    0.0972   -0.3902 H   0  0  0  0  0  0  0  0  0  0  0  0\n    6.1261   -1.3716   -2.2702 H   0  0  0  0  0  0  0  0  0  0  0  0\n    3.7821   -2.2135   -2.3167 H   0  0  0  0  0  0  0  0  0  0  0  0\n    2.1876   -1.6019   -0.4846 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -1.8993    2.3081   -2.4940 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -4.2935    2.5645   -2.7416 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -5.0848    1.8864   -0.1834 H   0  0  0  0  0  0  0  0  0  0  0  0\n   -5.7875    0.9733   -1.5733 H   0  0  0  0  0  0  0  0  0  0  0  0\n  1  2  1  0\n  2  3  1  0\n  3  4  2  0\n  4  5  1  0\n  5  6  1  0\n  6  7  1  0\n  7  8  1  0\n  8  9  1  0\n  9 10  1  0\n 10 11  1  0\n 11 12  2  0\n 12 13  1  0\n 13 14  2  0\n 14 15  1  0\n 15 16  2  0\n 16 17  1  0\n 17 18  2  0\n  5 19  1  0\n 19 20  2  0\n 20 21  1  0\n 21  3  1  0\n 18 10  1  0\n 18 13  1  0\n  1 22  1  0\n  1 23  1  0\n  1 24  1  0\n  5 25  1  0\n  7 26  1  0\n  7 27  1  0\n  8 28  1  0\n  8 29  1  0\n  9 30  1  0\n  9 31  1  0\n 14 32  1  0\n 15 33  1  0\n 16 34  1  0\n 17 35  1  0\n 19 36  1  0\n 20 37  1  0\n 21 38  1  0\n 21 39  1  0\nM  END\n\n$$$$\n", "properties": [{"name": "Molecular weight (Da)", "value": 302.4029999999997}, {"name": "cLogP (Crippen)", "value": 2.8855000000000013}, {"name": "TPSA (Å²)", "value": 52.3}, {"name": "H-bond donors", "value": 0}, {"name": "H-bond acceptors", "value": 6}, {"name": "Rotatable bonds", "value": 6}, {"name": "Ring count", "value": 3}, {"name": "Aromatic rings", "value": 2}, {"name": "Heavy atoms", "value": 21}, {"name": "Fraction Csp3", "value": 0.4}], "endpoints": [{"id": "QED", "kind": "classification", "category": "Medicinal Chemistry", "percentile": 64.405, "probability": 0.629}, {"id": "Lipinski Rules", "kind": "continuous", "category": "Medicinal Chemistry", "percentile": 63.804, "value": 4.0, "domain": {"min": 0.0, "max": 4.0}, "acceptance": {"min": 0.0, "max": 1.0}}, {"id": "MW", "kind": "continuous", "category": "Physicochemical Properties", "percentile": 41.295, "value": 302.403, "domain": {"min": 0.0, "max": 1000.0}, "acceptance": {"min": 100.0, "max": 600.0}}, {"id": "logP", "kind": "continuous", "category": "Physicochemical Properties", "percentile": 60.217, "value": 2.886, "domain": {"min": -2.0, "max": 8.0}, "acceptance": {"min": 0.0, "max": 5.0}}, {"id": "logS", "kind": "continuous", "category": "Physicochemical Properties", "percentile": 56.766, "value": -2.706, "domain": {"min": -12.0, "max": 2.0}, "acceptance": {"min": 0.0001}}, {"id": "nHA", "kind": "continuous", "category": "Physicochemical Properties", "percentile": 69.504, "value": 6.0, "domain": {"min": 0.0, "max": 20.0}, "acceptance": {"min": 0.0, "max": 12.0}}, {"id": "nHD", "kind": "continuous", "category": "Physicochemical Properties", "percentile": 11.768, "value": 0.0, "domain": {"min": 0.0, "max": 10.0}, "acceptance": {"min": 0.0, "max": 7.0}}, {"id": "Stereo Centers", "kind": "continuous", "category": "Physicochemical Properties", "percentile": 54.808, "value": 1.0, "domain": {"min": 0.0, "max": 10.0}, "acceptance": {"min": 0.0, "max": 2.0}}, {"id": "TPSA", "kind": "continuous", "category": "Physicochemical Properties", "percentile": 31.64, "value": 52.3, "domain": {"min": 0.0, "max": 300.0}, "acceptance": {"min": 0.0, "max": 140.0}}, {"id": "Caco-2 Perm.", "kind": "continuous", "category": "Absorption", "percentile": 41.605, "value": -5.117, "domain": {"min": -8.0, "max": 1.0}, "acceptance": {"min": -5.0}}, {"id": "PAMPA", "kind": "classification", "category": "Absorption", "percentile": 91.547, "probability": 0.978}, {"id": "Pgp inhib.", "kind": "classification", "category": "Absorption", "percentile": 73.866, "probability": 0.465}, {"id": "HIA", "kind": "classification", "category": "Absorption", "percentile": 94.339, "probability": 1.0}, {"id": "F50%", "kind": "classification", "category": "Absorption", "percentile": 60.527, "probability": 0.849}, {"id": "Hydration Free Energy", "kind": "continuous", "category": "Absorption", "percentile": 72.199, "value": -7.38, "domain": {"min": -30.0, "max": 5.0}, "acceptance": {"min": -10.0}}, {"id": "Lipophilicity", "kind": "continuous", "category": "Absorption", "percentile": 77.627, "value": 2.877, "domain": {"min": -2.0, "max": 8.0}, "acceptance": {"min": 0.0, "max": 3.0}}, {"id": "BBB", "kind": "classification", "category": "Distribution", "percentile": 73.866, "probability": 0.938}, {"id": "PPB", "kind": "continuous", "category": "Distribution", "percentile": 61.07, "value": 83.427, "domain": {"min": 0.0, "max": 100.0}, "acceptance": {"max": 90.0}}, {"id": "VDss", "kind": "continuous", "category": "Distribution", "percentile": 2.482, "value": -8.385, "domain": {"min": -13.666, "max": 15.075480000000011}, "acceptance": {"min": 0.04, "max": 20.0}}, {"id": "CYP1A2 inhib.", "kind": "classification", "category": "Metabolism", "percentile": 80.264, "probability": 0.404}, {"id": "CYP2C9 inhib.", "kind": "classification", "category": "Metabolism", "percentile": 62.001, "probability": 0.08}, {"id": "CYP2C19 inhib.", "kind": "classification", "category": "Metabolism", "percentile": 92.827, "probability": 0.747}, {"id": "CYP2D6 inhib.", "kind": "classification", "category": "Metabolism", "percentile": 70.454, "probability": 0.165}, {"id": "CYP3A4 inhib.", "kind": "classification", "category": "Metabolism", "percentile": 59.868, "probability": 0.138}, {"id": "CYP2C9 substr.", "kind": "classification", "category": "Metabolism", "percentile": 38.658, "probability": 0.109}, {"id": "CYP2D6 substr.", "kind": "classification", "category": "Metabolism", "percentile": 62.621, "probability": 0.173}, {"id": "CYP3A4 substr.", "kind": "classification", "category": "Metabolism", "percentile": 90.345, "probability": 0.818}, {"id": "LD50", "kind": "continuous", "category": "Toxicity", "percentile": 25.126, "value": 2.101, "domain": {"min": 0.0, "max": 5.0}, "acceptance": {"min": 1.5}}, {"id": "AMES Toxicity", "kind": "classification", "category": "Toxicity", "percentile": 64.327, "probability": 0.283}, {"id": "DILI", "kind": "classification", "category": "Toxicity", "percentile": 60.489, "probability": 0.612}, {"id": "hERG blockers", "kind": "classification", "category": "Toxicity", "percentile": 43.66, "probability": 0.212}, {"id": "Carcinogenicity", "kind": "classification", "category": "Toxicity", "percentile": 15.665, "probability": 0.038}, {"id": "ClinTox", "kind": "classification", "category": "Toxicity", "percentile": 52.385, "probability": 0.106}, {"id": "Skin Reaction", "kind": "classification", "category": "Toxicity", "percentile": 65.568, "probability": 0.59}, {"id": "NR-AR-LBD", "kind": "classification", "category": "Tox21 Pathways", "percentile": 21.055, "probability": 0.003}, {"id": "NR-AR", "kind": "classification", "category": "Tox21 Pathways", "percentile": 12.912, "probability": 0.005}, {"id": "NR-AhR", "kind": "classification", "category": "Tox21 Pathways", "percentile": 78.131, "probability": 0.156}, {"id": "NR-Aromatase", "kind": "classification", "category": "Tox21 Pathways", "percentile": 61.187, "probability": 0.051}, {"id": "NR-ER-LBD", "kind": "classification", "category": "Tox21 Pathways", "percentile": 35.944, "probability": 0.01}, {"id": "NR-ER", "kind": "classification", "category": "Tox21 Pathways", "percentile": 73.75, "probability": 0.165}, {"id": "NR-PPAR-gamma", "kind": "classification", "category": "Tox21 Pathways", "percentile": 79.178, "probability": 0.035}, {"id": "SR-ARE", "kind": "classification", "category": "Tox21 Pathways", "percentile": 69.678, "probability": 0.28}, {"id": "SR-ATAD5", "kind": "classification", "category": "Tox21 Pathways", "percentile": 68.399, "probability": 0.021}, {"id": "SR-HSE", "kind": "classification", "category": "Tox21 Pathways", "percentile": 77.937, "probability": 0.061}, {"id": "SR-MMP", "kind": "classification", "category": "Tox21 Pathways", "percentile": 41.644, "probability": 0.02}, {"id": "SR-p53", "kind": "classification", "category": "Tox21 Pathways", "percentile": 41.605, "probability": 0.012}, {"id": "Half-life", "kind": "continuous", "category": "Excretion", "percentile": 10.12, "value": -17.369, "domain": {"min": -50.0, "max": 110.0}, "acceptance": {"min": 2.0, "max": 24.0}}, {"id": "Hepatocyte Clear.", "kind": "continuous", "category": "Excretion", "percentile": 96.355, "value": 126.927, "domain": {"min": 0.0, "max": 200.0}, "acceptance": {"max": 50.0}}, {"id": "Microsomal Clear.", "kind": "continuous", "category": "Excretion", "percentile": 95.967, "value": 101.195, "domain": {"min": 0.0, "max": 200.0}, "acceptance": {"max": 50.0}}]};
 </script>
 
 <script>
-  const viewer = $3Dmol.createViewer("viewer", { backgroundColor: window.MOLDASH.viewer.background });
-  const sdf = window.MOLDASH.sdf;
+  if (typeof $3Dmol !== "undefined") {
+    const viewer = $3Dmol.createViewer("viewer", { backgroundColor: window.MOLDASH.viewer.background });
+    const sdf = window.MOLDASH.sdf;
 
-  viewer.addModel(sdf, "sdf");
-  viewer.setStyle({}, { stick: { radius: 0.09 }, sphere: { scale: 0.15 } });
-  viewer.zoomTo();
-  viewer.zoom(window.MOLDASH.viewer.zoomOut);
-  viewer.translate(-80, -20);
-  viewer.render();
+    viewer.addModel(sdf, "sdf");
+    viewer.setStyle({}, { stick: { radius: 0.09 }, sphere: { scale: 0.15 } });
+    viewer.zoomTo();
+    viewer.zoom(window.MOLDASH.viewer.zoomOut);
+    viewer.translate(-80, -20);
+    viewer.render();
+  } else {
+    const err = document.getElementById("viewer-error");
+    if (err) err.style.display = "block";
+  }
 
   function fmtValue(x) {
     if (typeof x === "number") {
@@ -67,7 +732,413 @@
   `).join("");
 </script>
 
-<script src="admet.js"></script>
+<script>
+(function () {
+  const cfg = window.MOLDASH
+  if (!cfg) return
+
+  const clamp01 = x => (typeof x === 'number' ? Math.min(1, Math.max(0, x)) : 0)
+  const clamp100 = x => (typeof x === 'number' ? Math.min(100, Math.max(0, x)) : 0)
+
+  const topLabels = [
+    { t: '\u2013\u2009\u2013\u2009\u2013', x: 4.5 },
+    { t: '\u2013\u2009\u2013', x: 21 },
+    { t: '\u2013', x: 41 },
+    { t: '+', x: 60 },
+    { t: '++', x: 80 },
+    { t: '+++', x: 95.5 }
+  ]
+
+  const bottomLabels = [
+    { t: '0', x: 0 },
+    { t: '10', x: 10 },
+    { t: '30', x: 30 },
+    { t: '50', x: 50 },
+    { t: '70', x: 70 },
+    { t: '90', x: 90 },
+    { t: '100', x: 100 }
+  ]
+
+  const ICON_COLLAPSED = 'admet-toggle-expand.png'
+  const ICON_EXPANDED = 'admet-toggle-collapse.png'
+
+  function makeWidget (ep) {
+    // pull out fields with defaults; use unary + for numeric conversion below
+    const {
+      id: rawId = '',
+      label: rawLabel,
+      kind: rawKind = '',
+      domain: epDomain,
+      acceptance: epAcc,
+      probability = 0,
+      percentile = 0,
+      value = 0
+    } = ep || {}
+
+    const id = String(rawId)
+    const label = rawLabel ?? id
+
+    const kind = String(rawKind)
+    const isContinuous =
+      kind === 'continuous' ||
+      (epDomain && Number.isFinite(+epDomain.min) && Number.isFinite(+epDomain.max)) ||
+      (epAcc && (Number.isFinite(+epAcc.min) || Number.isFinite(+epAcc.max)))
+
+    const probPct = clamp01(+probability) * 100
+    const pct = clamp100(+percentile)
+
+    const wrap = document.createElement('div')
+    wrap.className = 'admet-entry'
+
+    if (isContinuous) {
+      // default domain/acceptance values
+      const { min: dminRaw = 0, max: dmaxRaw = 1 } = epDomain || {}
+      const { min: accMinRaw, max: accMaxRaw } = epAcc || {}
+
+      const dmin = +dminRaw
+      const dmax = +dmaxRaw
+      const span = dmax - dmin || 1
+
+      const v = +value
+      const xVal = Math.max(0, Math.min(1, (v - dmin) / span))
+      const leftPct = (xVal * 100).toFixed(2)
+
+      const accMinNum = +accMinRaw
+      const accMaxNum = +accMaxRaw
+
+      const hasMin = Number.isFinite(accMinNum)
+      const hasMax = Number.isFinite(accMaxNum)
+
+      let accMinLabel = dmin
+      let accMaxLabel = dmax
+
+      let accMinPct = 0
+      let accMaxPct = 100
+
+      if (hasMin || hasMax) {
+        const amin = hasMin ? accMinNum : dmin
+        const amax = hasMax ? accMaxNum : dmax
+
+        accMinLabel = amin
+        accMaxLabel = amax
+
+        const amin01 = Math.max(0, Math.min(1, (amin - dmin) / span))
+        const amax01 = Math.max(0, Math.min(1, (amax - dmin) / span))
+
+        accMinPct = +((amin01 * 100).toFixed(2))
+        accMaxPct = +((amax01 * 100).toFixed(2))
+      }
+
+      if (accMinPct > accMaxPct) {
+        // swap using array destructuring for clarity
+        [accMinPct, accMaxPct] = [accMaxPct, accMinPct]
+        [accMinLabel, accMaxLabel] = [accMaxLabel, accMinLabel]
+      }
+
+      const leftOutside = accMinPct
+      const rightOutside = 100 - accMaxPct
+
+      const minRedBand = 4
+      const minYellowBand = 2
+      const edgeTightness = 0.85
+
+      let leftRedPct = 0
+      let leftMidPct = 0
+      if (leftOutside > 0) {
+        leftRedPct = Math.min(accMinPct, minRedBand)
+        leftMidPct = Math.min(
+          accMinPct,
+          Math.max(leftRedPct + minYellowBand, accMinPct * edgeTightness)
+        )
+      }
+
+      let rightRedPct = 100
+      let rightMidPct = 100
+      if (rightOutside > 0) {
+        rightRedPct = Math.max(accMaxPct, 100 - minRedBand)
+        rightMidPct = Math.max(
+          accMaxPct,
+          Math.min(
+            rightRedPct - minYellowBand,
+            accMaxPct + rightOutside * (1 - edgeTightness)
+          )
+        )
+      }
+
+      const dminLabel = Number.isFinite(dmin) ? String(dmin) : '0'
+      const dmaxLabel = Number.isFinite(dmax) ? String(dmax) : '1'
+      const aMinLabel = Number.isFinite(accMinLabel) ? String(accMinLabel) : dminLabel
+      const aMaxLabel = Number.isFinite(accMaxLabel) ? String(accMaxLabel) : dmaxLabel
+
+      wrap.innerHTML = `
+        <div class="risk2-inline">
+          <div class="risk2-inline-title">${label}</div>
+
+          <div class="risk2-stage2">
+
+            <div class="risk2-topscale risk2-topscale-continuous">
+              <span style="left:0%">${dminLabel}</span>
+              ${accMinPct > 0 ? `<span style="left:${accMinPct}%">${aMinLabel}</span>` : ''}
+              ${accMaxPct < 100 ? `<span style="left:${accMaxPct}%">${aMaxLabel}</span>` : ''}
+              <span style="left:100%">${dmaxLabel}</span>
+            </div>
+
+            <div class="risk2-track continuous-track"
+                 style="--acc-min:${accMinPct}%; --acc-max:${accMaxPct}%; --left-red:${leftRedPct.toFixed(2)}%; --left-mid:${leftMidPct.toFixed(2)}%; --right-mid:${rightMidPct.toFixed(2)}%; --right-red:${rightRedPct.toFixed(2)}%;">
+              <div class="risk2-barclip">
+                <div class="range-gradient"></div>
+                <div class="risk2-fill" style="left:calc(${leftPct}% - 6px); right:0;"></div>
+              </div>
+
+              <div class="risk2-percentile"
+                   data-pct="${pct.toFixed(6)}"
+                   style="left:${pct.toFixed(2)}%">
+                <div class="risk2-percentile-label">
+                  <div class="v">${pct.toFixed(2)}% (DB)</div>
+                </div>
+              </div>
+
+              <div class="risk2-knob" style="left:${leftPct}%"></div>
+            </div>
+
+            <div class="risk2-bottomscale risk2-bottomscale-continuous">
+              ${bottomLabels.map(o => `<span style="left:${o.x}%">${o.t}</span>`).join('')}
+            </div>
+
+          </div>
+        </div>
+      `
+
+      return wrap
+    }
+
+    wrap.innerHTML = `
+      <div class="risk2-inline">
+        <div class="risk2-inline-title">${label}</div>
+
+        <div class="risk2-stage2">
+          <div class="risk2-topscale">
+            ${topLabels.map(o => `<span class="z" style="left:${o.x}%">${o.t}</span>`).join('')}
+          </div>
+
+          <div class="risk2-track">
+            <div class="risk2-barclip">
+              <div class="risk2-gradient"></div>
+              <div class="risk2-fill" style="left:calc(${probPct.toFixed(2)}% - 6px); right:0;"></div>
+            </div>
+
+            <div class="risk2-sep" style="left:10%"></div>
+            <div class="risk2-sep" style="left:30%"></div>
+            <div class="risk2-sep" style="left:50%"></div>
+            <div class="risk2-sep" style="left:70%"></div>
+            <div class="risk2-sep" style="left:90%"></div>
+
+            <div class="risk2-percentile" data-pct="${pct.toFixed(6)}" style="left:${pct.toFixed(2)}%">
+              <div class="risk2-percentile-label">
+                <div class="v">${pct.toFixed(2)}% (DB)</div>
+              </div>
+            </div>
+
+            <div class="risk2-knob" style="left:${probPct.toFixed(2)}%"></div>
+          </div>
+
+          <div class="risk2-bottomscale">
+            ${bottomLabels.map(o => `<span style="left:${o.x}%">${o.t}</span>`).join('')}
+          </div>
+        </div>
+      </div>
+    `
+    return wrap
+  }
+
+  function render () {
+    const host = document.getElementById('admet')
+    if (!host) return
+
+    host.innerHTML = ''
+
+    const controls = document.createElement('div')
+    controls.className = 'admet-controls'
+
+    const btn = document.createElement('button')
+    btn.className = 'admet-toggle'
+    btn.type = 'button'
+    btn.setAttribute('aria-label', 'Toggle annotations')
+
+    btn.innerHTML = `
+      <img
+        id="admet-toggle-icon"
+        src="${ICON_COLLAPSED}"
+        class="admet-toggle-icon"
+        alt=""
+        aria-hidden="true">
+    `
+
+    const stored = window.localStorage ? window.localStorage.getItem('admet_show_annotations') : null
+    let showAnnotations = stored === '1'
+
+    controls.appendChild(btn)
+
+    // keep the toggle inside a full-width header container located inside
+    // the visible panel content (preferably the .card) so both title and
+    // controls render within the panel bounds whether expanded or not.
+    const panel = document.getElementById('admet-panel')
+    if (panel) {
+      // prefer inserting header inside the panel's .card if present
+      const targetContainer = panel.querySelector('.card') || panel
+
+      // ensure header wrapper exists at the top of the chosen container
+      let header = targetContainer.querySelector('.admet-header')
+      if (!header) {
+        header = document.createElement('div')
+        header.className = 'admet-header'
+        targetContainer.insertBefore(header, targetContainer.firstChild)
+      }
+
+      // try to find a title already inside the panel; if none exists,
+      // fall back to a global title text (if available) or create a default
+      let titleEl = panel.querySelector('.admet-title, h1, h2, .title, [data-title]')
+      if (!titleEl) {
+        const globalTitle = document.querySelector('.admet-title, h1, h2, .title, [data-title]')
+        const titleText = globalTitle ? (globalTitle.textContent || '').trim() : 'ADMET'
+        const newTitle = document.createElement('div')
+        newTitle.className = 'admet-title'
+        newTitle.textContent = titleText
+        header.appendChild(newTitle)
+      } else if (titleEl.parentNode !== header) {
+        // move the panel-local title into the header container
+        header.appendChild(titleEl)
+      }
+
+      // append controls to the header; CSS will push them to the right edge
+      header.appendChild(controls)
+    } else {
+      // fallback: if panel is missing, append controls to the host
+      host.appendChild(controls)
+    }
+
+    const content = document.createElement('div')
+    content.className = 'admet-content'
+    host.appendChild(content)
+
+    function snapPercentileMarkers () {
+      const stages = content.querySelectorAll('.risk2-stage2')
+      stages.forEach(function (stage) {
+        const track = stage.querySelector('.risk2-track')
+        const marker = stage.querySelector('.risk2-percentile')
+        if (!track || !marker) return
+
+        const pct = Number(marker.getAttribute('data-pct') || '0')
+        const w = track.clientWidth
+        const x = Math.round((pct / 100) * w)
+
+        marker.style.left = x + 'px'
+      })
+    }
+
+    function drawEndpoints () {
+      content.innerHTML = ''
+
+      const eps = Array.isArray(cfg.endpoints) ? cfg.endpoints : []
+
+      if (!showAnnotations) {
+        const medchem = eps.filter(function (ep) {
+          const c = ep.category == null ? '' : String(ep.category).trim()
+          return c === 'Medicinal Chemistry'
+        })
+
+        if (medchem.length) {
+          medchem.forEach(function (ep) {
+            content.appendChild(makeWidget(ep))
+          })
+          requestAnimationFrame(snapPercentileMarkers)
+          return
+        }
+
+        const qed = eps.find(function (ep) {
+          const rawId = String(ep.id || '')
+          const rawLabel = ep.label == null ? '' : String(ep.label)
+          const id = rawId
+          const label = rawLabel
+          return id === 'qed' || label.includes('qed')
+        })
+
+        if (qed) content.appendChild(makeWidget(qed))
+        requestAnimationFrame(snapPercentileMarkers)
+        return
+      }
+
+      const order = [
+        'Medicinal Chemistry',
+        'Physicochemical Properties',
+        'Absorption',
+        'Distribution',
+        'Metabolism',
+        'Excretion',
+        'Toxicity',
+        'Tox21 Pathways'
+      ]
+
+      const groups = new Map()
+      order.forEach(k => groups.set(k, []))
+
+      eps.forEach(function (ep) {
+        const raw = ep.category == null ? '' : String(ep.category)
+        const k = raw && raw.trim() ? raw.trim() : 'Physicochemical Properties'
+        if (!groups.has(k)) groups.set(k, [])
+        groups.get(k).push(ep)
+      })
+
+      order.forEach(function (k) {
+        const items = groups.get(k) || []
+        if (!items.length) return
+
+        const title = document.createElement('div')
+        title.className = 'admet-group-title'
+        title.textContent = k
+        content.appendChild(title)
+
+        const grid = document.createElement('div')
+        grid.className = 'admet-group-grid'
+        content.appendChild(grid)
+
+        items.forEach(function (ep) {
+          grid.appendChild(makeWidget(ep))
+        })
+      })
+
+      requestAnimationFrame(snapPercentileMarkers)
+    }
+
+    function sync () {
+      btn.classList.toggle('active', showAnnotations)
+
+      host.classList.toggle('admet-compact', !showAnnotations)
+
+      const panel = document.getElementById('admet-panel')
+      if (panel) panel.classList.toggle('admet-expanded', showAnnotations)
+
+      const icon = btn.querySelector('#admet-toggle-icon')
+      if (icon) icon.src = showAnnotations ? ICON_EXPANDED : ICON_COLLAPSED
+
+      if (window.localStorage) {
+        window.localStorage.setItem('admet_show_annotations', showAnnotations ? '1' : '0')
+      }
+
+      drawEndpoints()
+    }
+
+    btn.addEventListener('click', function () {
+      showAnnotations = !showAnnotations
+      sync()
+    })
+
+    sync()
+  }
+
+  render()
+})()
+</script>
 
 </body>
 </html>

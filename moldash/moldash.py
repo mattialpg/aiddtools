@@ -4,6 +4,7 @@ import json
 import random
 import webbrowser
 import csv
+import html
 from pathlib import Path
 
 import pandas as pd
@@ -14,13 +15,17 @@ from rdkit.Chem import AllChem, Crippen, Descriptors, Lipinski, rdMolDescriptors
 BASE_DIR = Path(__file__).resolve().parent
 HTML_PATH = BASE_DIR / 'moldash.html'
 CSV_PATH = BASE_DIR / 'df_candidates.csv'
+TEMPLATE_PATH = BASE_DIR / 'show_admet_template.html'
+STYLE_PATH = BASE_DIR / 'style.css'
+ADMET_STYLE_PATH = BASE_DIR / 'admet_style.css'
+ADMET_JS_PATH = BASE_DIR / 'admet.js'
 
 df = pd.read_csv(CSV_PATH)
 
 selected_row = df.sample(1).iloc[0]
 smiles = selected_row['ISOSMILES']
 mol = Chem.MolFromSmiles(smiles)
-mol_name = selected_row.get('SERIES')
+mol_name = selected_row.get('SERIES') or selected_row.get('ID') or 'Unknown molecule'
 
 mol = Chem.AddHs(mol)
 AllChem.EmbedMolecule(mol, AllChem.ETKDGv3())
@@ -55,7 +60,7 @@ ENDPOINTS = {
         'domain': {'min': 0.0, 'max': 4.0},
         'acceptance': {'min': 0.0, 'max': 1.0},
     },
-    'SAscore': {
+    'SA_Score': {
         'label': 'SA_score',
         'category': 'Medicinal Chemistry',
         'kind': 'continuous',
@@ -195,7 +200,7 @@ ENDPOINTS = {
     # ---------
     'Half_Life_Obach': {
         'label': 'Half-life', 'category': 'Excretion', 'kind': 'continuous',
-        'domain': {'min': -3.0, 'max': 3.0},
+        'domain': {'min': -50.0, 'max': 110.0},
         'acceptance': {'min': 2.0, 'max': 24.0},
     },
     'Clearance_Hepatocyte_AZ': {
@@ -209,6 +214,31 @@ ENDPOINTS = {
         'acceptance': {'max': 50.0},
     },
 }
+
+def infer_domain_from_data(column_name, fallback):
+    series = pd.to_numeric(df[column_name], errors='coerce').dropna()
+    if series.empty:
+        return fallback
+
+    q01 = float(series.quantile(0.01))
+    q99 = float(series.quantile(0.99))
+    if q01 == q99:
+        q01 = float(series.min())
+        q99 = float(series.max())
+    if q01 == q99:
+        return fallback
+    return {'min': q01, 'max': q99}
+
+
+def value_outside_domain(value, domain):
+    if not domain:
+        return False
+    dmin = domain.get('min')
+    dmax = domain.get('max')
+    if dmin is None or dmax is None:
+        return False
+    return value < float(dmin) or value > float(dmax)
+
 
 # Build endpoints list from ENDPOINTS only
 endpoints = []
@@ -236,9 +266,12 @@ for old_name, meta in ENDPOINTS.items():
     if meta['kind'] == 'classification':
         endpoint_data['probability'] = float(raw_value)
     else:
-        endpoint_data['value'] = float(raw_value)
+        value = float(raw_value)
+        endpoint_data['value'] = value
 
         domain_rule = meta.get('domain')
+        if value_outside_domain(value, domain_rule):
+            domain_rule = infer_domain_from_data(old_name, domain_rule)
         if domain_rule is not None:
             endpoint_data['domain'] = domain_rule
 
@@ -266,92 +299,23 @@ data = {
 }
 
 data_json = json.dumps(data, ensure_ascii=False)
-
-
-# -------------------------
-# HTML
-# -------------------------
-
-html_content = f"""
-<!doctype html>
-<html>
-<head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>Molecule viewer</title>
-
-<link rel="stylesheet" href="style.css">
-<link rel="stylesheet" href="admet_style.css">
-
-<script src="https://3dmol.csb.pitt.edu/build/3Dmol-min.js"></script>
-</head>
-
-<body>
-
-<div id="viewer"></div>
-
-<div id="mol-title">
-  <div class="mol-name">{data['molecule']['name']}</div>
-  <div class="mol-meta">{data['molecule']['atomCount']} atoms · small molecule</div>
-</div>
-
-<div id="property-panel">
-  <div class="card">
-    <div class="title">PROPERTIES</div>
-    <table id="props"></table>
-  </div>
-</div>
-
-<div id="admet-panel">
-  <div class="card admet-card">
-    <div class="title">ADMET</div>
-    <div id="admet"></div>
-  </div>
-</div>
-
-<script>
-  window.MOLDASH = {data_json};
-</script>
-
-<script>
-  const viewer = $3Dmol.createViewer("viewer", {{ backgroundColor: window.MOLDASH.viewer.background }});
-  const sdf = window.MOLDASH.sdf;
-
-  viewer.addModel(sdf, "sdf");
-  viewer.setStyle({{}}, {{ stick: {{ radius: 0.09 }}, sphere: {{ scale: 0.15 }} }});
-  viewer.zoomTo();
-  viewer.zoom(window.MOLDASH.viewer.zoomOut);
-  viewer.translate(-80, -20);
-  viewer.render();
-
-  function fmtValue(x) {{
-    if (typeof x === "number") {{
-      if (Number.isInteger(x)) return String(x);
-      return x.toFixed(3);
-    }}
-    return String(x);
-  }}
-
-  const table = document.getElementById("props");
-  table.innerHTML = window.MOLDASH.properties.map(p => `
-    <tr>
-      <td>${{p.name}}</td>
-      <td>${{fmtValue(p.value)}}</td>
-    </tr>
-  `).join("");
-</script>
-
-<script src="admet.js"></script>
-
-</body>
-</html>
-"""
+style_css = STYLE_PATH.read_text(encoding='utf-8')
+admet_style_css = ADMET_STYLE_PATH.read_text(encoding='utf-8')
+admet_js = ADMET_JS_PATH.read_text(encoding='utf-8')
+template = TEMPLATE_PATH.read_text(encoding='utf-8')
+replacements = {
+    '__STYLE_CSS__': style_css,
+    '__ADMET_STYLE_CSS__': admet_style_css,
+    '__MOL_NAME__': html.escape(str(data['molecule']['name'])),
+    '__ATOM_COUNT__': str(data['molecule']['atomCount']),
+    '__MOLDASH_JSON__': data_json,
+    '__ADMET_JS__': admet_js,
+}
+html_content = template
+for key, value in replacements.items():
+    html_content = html_content.replace(key, value)
 
 HTML_PATH.write_text(html_content, encoding='utf-8')
 
-HTML_PATH.write_text(html_content, encoding="utf-8")
-
 print(f"Random SMILES used: {smiles}")
 print(f"Viewer saved to: {HTML_PATH}")
-
-

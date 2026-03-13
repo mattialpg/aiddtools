@@ -1,0 +1,85 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Molecule viewer</title>
+
+<script src="https://3dmol.csb.pitt.edu/build/3Dmol-min.js"></script>
+<style>
+__STYLE_CSS__
+</style>
+<style>
+__ADMET_STYLE_CSS__
+</style>
+</head>
+
+<body>
+
+<div id="viewer"></div>
+<div id="viewer-error" style="display:none;position:fixed;left:16px;top:16px;z-index:99;padding:10px 12px;background:rgba(185,28,28,.9);color:#fff;border-radius:8px;font-size:13px;">
+  3D viewer failed to load (3Dmol.js unavailable). Check internet/CDN access.
+</div>
+
+<div id="mol-title">
+  <div class="mol-name">__MOL_NAME__</div>
+  <div class="mol-meta">__ATOM_COUNT__ atoms · small molecule</div>
+</div>
+
+<div id="property-panel">
+  <div class="card">
+    <div class="title">PROPERTIES</div>
+    <table id="props"></table>
+  </div>
+</div>
+
+<div id="admet-panel">
+  <div class="card admet-card">
+    <div class="title">ADMET</div>
+    <div id="admet"></div>
+  </div>
+</div>
+
+<script>
+  window.MOLDASH = __MOLDASH_JSON__;
+</script>
+
+<script>
+  if (typeof $3Dmol !== "undefined") {
+    const viewer = $3Dmol.createViewer("viewer", { backgroundColor: window.MOLDASH.viewer.background });
+    const sdf = window.MOLDASH.sdf;
+
+    viewer.addModel(sdf, "sdf");
+    viewer.setStyle({}, { stick: { radius: 0.09 }, sphere: { scale: 0.15 } });
+    viewer.zoomTo();
+    viewer.zoom(window.MOLDASH.viewer.zoomOut);
+    viewer.translate(-80, -20);
+    viewer.render();
+  } else {
+    const err = document.getElementById("viewer-error");
+    if (err) err.style.display = "block";
+  }
+
+  function fmtValue(x) {
+    if (typeof x === "number") {
+      if (Number.isInteger(x)) return String(x);
+      return x.toFixed(3);
+    }
+    return String(x);
+  }
+
+  const table = document.getElementById("props");
+  table.innerHTML = window.MOLDASH.properties.map(p => `
+    <tr>
+      <td>${p.name}</td>
+      <td>${fmtValue(p.value)}</td>
+    </tr>
+  `).join("");
+</script>
+
+<script>
+__ADMET_JS__
+</script>
+
+</body>
+</html>
