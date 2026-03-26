@@ -329,7 +329,8 @@ def analyse_pdb_files(pdb_files, lig_id=None, xml_outdir=None,
 def get_ligands(pdb_file, select_loi=False):
     module_dir = Path(__file__).resolve().parent
     df_biolip = pd.read_csv(module_dir / 'biolip_ligands.csv')
-    biolip_ligands = df_biolip.InChI.tolist()
+    # BioLiP list is keyed by 3-letter chemical component IDs (CCI), not InChI.
+    biolip_ligands = set(df_biolip["CCI"].astype(str).str.strip().str.upper().tolist())
 
     # Parse the structure with PLIP
     complex_mol = PDBComplex()
@@ -339,7 +340,8 @@ def get_ligands(pdb_file, select_loi=False):
     ligands = {}
     for lig in complex_mol.ligands:
         lig_id = f"{lig.hetid}:{lig.chain}:{lig.position}"
-        loi = "Non-LOI" if lig.hetid in biolip_ligands else "LOI"
+        hetid = str(lig.hetid).strip().upper()
+        loi = "Non-LOI" if hetid in biolip_ligands else "LOI"
         ligands[lig_id] = loi
     
     if select_loi:
