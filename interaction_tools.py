@@ -13,6 +13,8 @@ import yaml
 from concurrent.futures import ProcessPoolExecutor
 from itertools import repeat
 
+from rdkit import Chem
+
 sys.path.append(str(Path(__file__).resolve().parent))
 # with warnings.catch_warnings():
 from pymol import cmd
@@ -236,6 +238,10 @@ def read_interaction_files(indir):
 
 
 def harmonise_interactions(df_int):
+    # Ensure expected columns exist even when PLIP returns metadata-only rows.
+    if 'INT_TYPE' not in df_int.columns:
+        df_int['INT_TYPE'] = None
+
     # Fill null values in one column with non-null values from another
     try: df_int['DONORIDX'] = df_int['DONORIDX'].combine_first(df_int['DON_IDX'])
     except: pass
@@ -320,16 +326,29 @@ def analyse_pdb_files(pdb_files, lig_id=None, xml_outdir=None,
 
     df_int = df_int.sort_values(by='PDB').reset_index(drop=True)
     df_int = harmonise_interactions(df_int)
-    df_int["RESID"] = df_int["RESTYPE"] + df_int["RESNR"]
+    required_defaults = {
+        "PDB": "",
+        "RESTYPE": "",
+        "RESNR": "",
+        "IDENTIFIERS_HETID": "",
+        "INT_TYPE": None,
+    }
+    for col, default in required_defaults.items():
+        if col not in df_int.columns:
+            df_int[col] = default
+
+    df_int["RESID"] = (
+        df_int["RESTYPE"].fillna("").astype(str) +
+        df_int["RESNR"].fillna("").astype(str)
+    )
     df_int = df_int[["PDB", "RESID", "IDENTIFIERS_HETID", "INT_TYPE"]]
-    df_int = df_int.rename(columns={"IDENTIFIERS_HETID": "LIGNAME"})
+    df_int = df_int.rename(columns={"IDENTIFIERS_HETID": "RESNAME"})
     return df_int
 
 
 def get_ligands(pdb_file, select_loi=False):
     module_dir = Path(__file__).resolve().parent
     df_biolip = pd.read_csv(module_dir / 'biolip_ligands.csv')
-    # BioLiP list is keyed by 3-letter chemical component IDs (CCI), not InChI.
     biolip_ligands = set(df_biolip["CCI"].astype(str).str.strip().str.upper().tolist())
 
     # Parse the structure with PLIP
@@ -342,9 +361,9 @@ def get_ligands(pdb_file, select_loi=False):
         lig_id = f"{lig.hetid}:{lig.chain}:{lig.position}"
         hetid = str(lig.hetid).strip().upper()
         loi = "Non-LOI" if hetid in biolip_ligands else "LOI"
-        ligands[lig_id] = loi
+        ligands[lig_id] = (loi, lig.mol.write("can").strip().split('\t')[0])
     
     if select_loi:
-        ligands = {k: v for k, v in ligands.items() if v == "LOI"}
+        ligands = {k: v for k, v in ligands.items() if v[0] == "LOI"}
 
     return ligands
