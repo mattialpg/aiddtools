@@ -326,6 +326,16 @@ def analyse_pdb_files(pdb_files, lig_id=None, xml_outdir=None,
 
     df_int = df_int.sort_values(by='PDB').reset_index(drop=True)
     df_int = harmonise_interactions(df_int)
+
+    # For metal interactions where the coordinating target belongs to the ligand,
+    # report the metal ion identity as the partner residue in the compact export.
+    metal_cols = {'INT_TYPE', 'LOCATION', 'RESTYPE_LIG', 'RESNR_LIG'}
+    if metal_cols.issubset(df_int.columns):
+        loc_series = df_int['LOCATION'].fillna('').astype(str).str.lower()
+        mask = (df_int['INT_TYPE'] == 'metal') & loc_series.str.startswith('ligand')
+        df_int.loc[mask, 'RESTYPE'] = df_int.loc[mask, 'RESTYPE_LIG']
+        df_int.loc[mask, 'RESNR'] = df_int.loc[mask, 'RESNR_LIG']
+
     required_defaults = {
         "PDB": "",
         "RESTYPE": "",
@@ -341,7 +351,6 @@ def analyse_pdb_files(pdb_files, lig_id=None, xml_outdir=None,
         df_int["RESTYPE"].fillna("").astype(str) +
         df_int["RESNR"].fillna("").astype(str)
     )
-    df_int = df_int[["PDB", "RESID", "IDENTIFIERS_HETID", "INT_TYPE"]]
     df_int = df_int.rename(columns={"IDENTIFIERS_HETID": "RESNAME"})
     return df_int
 

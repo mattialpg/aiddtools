@@ -649,7 +649,9 @@ class PLInteraction:
 
         self.water_bridges = self.refine_water_bridges(self.water_bridges, self.hbonds_ldon, self.hbonds_pdon)
 
-        self.metal_complexes = metal_complexation(self.ligand.metals, self.ligand.metal_binding,
+        nearby_metals = self._collect_nearby_ion_ligand_metals(protcomplex)
+        all_metals = self.ligand.metals + nearby_metals
+        self.metal_complexes = metal_complexation(all_metals, self.ligand.metal_binding,
                                                   self.bindingsite.metal_binding)
 
         self.all_itypes = self.saltbridge_lneg + self.saltbridge_pneg + self.hbonds_pdon
@@ -701,6 +703,52 @@ class PLInteraction:
                 logger.info(f'complex uses {interactions_list}')
         else:
             logger.info('no interactions for this ligand')
+
+    def _collect_nearby_ion_ligand_metals(self, protcomplex):
+        """Add standalone ion ligands (for example MG) near current ligand metal-binding atoms."""
+        if not getattr(config, 'INCLUDE_NEIGHBOR_METAL_IONS', False):
+            return []
+        if not self.ligand.metal_binding:
+            return []
+
+        metal_data = namedtuple('metal', 'm orig_m m_orig_idx')
+        current_key = (self.ligand.hetid, self.ligand.chain, int(self.ligand.position))
+        seen_orig_idx = {m.m_orig_idx for m in self.ligand.metals}
+        nearby_metals = []
+
+        for other_lig in protcomplex.ligands:
+            other_key = (other_lig.hetid, other_lig.chain, int(other_lig.position))
+            if other_key == current_key:
+                continue
+            if str(other_lig.hetid).upper() not in config.METAL_IONS:
+                continue
+
+            other_bsid = ':'.join([other_lig.hetid, other_lig.chain, str(other_lig.position)])
+            for atom in other_lig.mol.atoms:
+                if atom.atomicnum == 1:
+                    continue
+                try:
+                    m_orig_idx = self.Mapper.mapid(atom.idx, mtype='ligand', bsid=other_bsid)
+                except KeyError:
+                    continue
+                if m_orig_idx in seen_orig_idx:
+                    continue
+
+                min_dist = min(
+                    euclidean3d(atom.coords, target.atom.coords) for target in self.ligand.metal_binding
+                )
+                if min_dist < config.METAL_DIST_MAX:
+                    nearby_metals.append(
+                        metal_data(m=atom, m_orig_idx=m_orig_idx,
+                                   orig_m=self.Mapper.id_to_atom(m_orig_idx))
+                    )
+                    seen_orig_idx.add(m_orig_idx)
+
+        if nearby_metals:
+            logger.info(
+                f'including {len(nearby_metals)} nearby standalone metal ion(s) for {self.ligand.hetid} metal complexation'
+            )
+        return nearby_metals
 
     def find_unpaired_ligand(self):
         """Identify unpaired functional in groups in ligands, involving H-Bond donors, acceptors, halogen bond donors.
@@ -1123,7 +1171,14 @@ class Ligand(Mol):
         self.metal_binding = self.find_metal_binding(self.all_atoms, self.water)
         self.metals = []
         data = namedtuple('metal', 'm orig_m m_orig_idx')
-        for a in [a for a in self.all_atoms if a.type.upper() in config.METAL_IONS]:
+        ligand_is_metal = str(self.hetid).upper() in config.METAL_IONS
+        for a in self.all_atoms:
+            # Some MD exports encode ion atom type as generic labels (e.g. VS).
+            # Accept residue-level metal identity as fallback.
+            if a.atomicnum == 1:
+                continue
+            if not (str(a.type).upper() in config.METAL_IONS or ligand_is_metal):
+                continue
             m_orig_idx = self.Mapper.mapid(a.idx, mtype=self.mtype, bsid=self.bsid)
             orig_m = self.Mapper.id_to_atom(m_orig_idx)
             self.metals.append(data(m=a, m_orig_idx=m_orig_idx, orig_m=orig_m))
